@@ -385,8 +385,8 @@ class Database {
             diem_danh_gia INT NOT NULL CHECK (diem_danh_gia >= 1 AND diem_danh_gia <= 5),
             noi_dung NVARCHAR(MAX),
             ngay_tao DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES nguoi_dung(id) ON DELETE CASCADE,
-            FOREIGN KEY (cum_san_id) REFERENCES cum_san(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES nguoi_dung(id),
+            FOREIGN KEY (cum_san_id) REFERENCES cum_san(id)
         );
       `);
 
@@ -765,7 +765,7 @@ class Database {
   public async getReviews(clusterId?: string): Promise<Review[]> {
     if (this.isSqlEnabled && this.pool) {
       let query = `
-        SELECT r.id, r.user_id as userId, u.username, u.full_name as userFullName, 
+        SELECT r.id, r.user_id as userId, u.username, u.ho_ten as userFullName, 
                r.cum_san_id as clusterId, r.diem_danh_gia as rating, r.noi_dung as comment, r.ngay_tao as createdAt
         FROM danh_gia r
         JOIN nguoi_dung u ON r.user_id = u.id
