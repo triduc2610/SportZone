@@ -38,6 +38,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
   const [ruleStart, setRuleStart] = useState('17');
   const [ruleEnd, setRuleEnd] = useState('21');
   const [ruleMultiplier, setRuleMultiplier] = useState('1.3');
+  const [rulePrice, setRulePrice] = useState('390000');
   const [showRuleForm, setShowRuleForm] = useState(false);
 
   // Owner analytics state
@@ -156,7 +157,14 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
     e.preventDefault();
     if (!selectedCluster) return;
 
+    const firstCourt = selectedCluster.courts?.[0];
+    if (!firstCourt) {
+      alert('Vui lòng thêm ít nhất một sân con trước khi cấu hình giờ vàng!');
+      return;
+    }
+
     try {
+      const computedMultiplier = Number(rulePrice) / firstCourt.basePrice;
       const res = await fetch('/api/pricing-rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,7 +172,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
           clusterId: selectedCluster.id,
           startHour: Number(ruleStart),
           endHour: Number(ruleEnd),
-          priceMultiplier: Number(ruleMultiplier)
+          priceMultiplier: Number(computedMultiplier.toFixed(2))
         })
       });
 
@@ -183,7 +191,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
       const res = await fetch(`/api/bookings/${bookingId}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, byOwner: true }),
       });
       if (res.ok) {
         alert('Cập nhật trạng thái lịch thành công!');
@@ -503,13 +511,16 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Hệ số nhân (Ví dụ: 1.3 là tăng 30%)</label>
+                      <label className="block text-[10px] text-slate-400 mb-1">
+                        Giá giờ vàng trực tiếp (VND/giờ)
+                        {selectedCluster.courts?.[0] && ` (gốc: ${formatVND(selectedCluster.courts[0].basePrice)})`}
+                      </label>
                       <input
                         type="number"
-                        step="0.1"
                         required
-                        value={ruleMultiplier}
-                        onChange={(e) => setRuleMultiplier(e.target.value)}
+                        value={rulePrice}
+                        onChange={(e) => setRulePrice(e.target.value)}
+                        placeholder="Ví dụ: 390000"
                         className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none"
                       />
                     </div>
@@ -518,7 +529,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                         type="submit"
                         className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-1.5 px-4 rounded-lg text-xs cursor-pointer"
                       >
-                        Thiết lập hệ số
+                        Cài đặt giá trực tiếp
                       </button>
                       <button
                         type="button"
@@ -566,18 +577,27 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
 
                   {/* Active pricing rules */}
                   <div className="border-t border-slate-850 pt-4">
-                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5">Cấu hình khung tăng giá động (Giờ vàng)</h3>
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5">Cấu hình khung giờ vàng</h3>
                     {selectedCluster.pricingRules && selectedCluster.pricingRules.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedCluster.pricingRules.map((rule: any) => (
-                          <div key={rule.id} className="py-1.5 px-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg text-xs font-medium flex items-center gap-2">
-                            <Sparkles size={12} />
-                            <span>Giờ vàng: {rule.startHour}:00 - {rule.endHour}:00 (Hệ số x{rule.priceMultiplier})</span>
-                          </div>
-                        ))}
+                      <div className="flex flex-wrap gap-3">
+                        {selectedCluster.pricingRules.map((rule: any) => {
+                          const basePrice = selectedCluster.courts?.[0]?.basePrice || 300000;
+                          const peakPrice = Math.round(basePrice * rule.priceMultiplier);
+                          return (
+                            <div key={rule.id} className="py-2.5 px-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg text-xs font-medium flex flex-col gap-1">
+                              <div className="flex items-center gap-2 font-bold">
+                                <Sparkles size={12} />
+                                <span>Giờ vàng: {rule.startHour}:00 - {rule.endHour}:00</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-sans">
+                                Đơn giá trực tiếp: <strong className="text-amber-300">{formatVND(peakPrice)}/h</strong> (Hệ số x{rule.priceMultiplier})
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <p className="text-[10px] text-slate-500">Chưa thiết lập hệ số giờ vàng. Đơn giá sẽ áp dụng đồng nhất 24/24.</p>
+                      <p className="text-[10px] text-slate-500">Chưa thiết lập giờ vàng. Đơn giá sẽ áp dụng đồng nhất 24/24.</p>
                     )}
                   </div>
                 </div>

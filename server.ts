@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { db } from "./src/db";
+import { getDefaultSportImage } from "./src/utils/imageHelper";
 
 // Load environment variables
 dotenv.config();
@@ -14,6 +15,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
+
+// Helper to get current Hanoi time (UTC+7)
+function getHanoiTime() {
+  const hanoiMs = Date.now() + 7 * 3600000;
+  const hanoiDate = new Date(hanoiMs);
+  const yyyy = hanoiDate.getUTCFullYear();
+  const mm = String(hanoiDate.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(hanoiDate.getUTCDate()).padStart(2, '0');
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+  const hour = hanoiDate.getUTCHours();
+  const minutes = hanoiDate.getUTCMinutes();
+  return { dateStr, hour, minutes };
+}
 
 async function startServer() {
   const app = express();
@@ -154,8 +168,17 @@ async function startServer() {
         const uniqueSportIds = Array.from(new Set(clusterCourts.map((crt: any) => crt.sportId)));
         const clusterSports = sports.filter((s: any) => uniqueSportIds.includes(s.id));
 
+        // Determine default image if not set or is general placeholder
+        let finalImageUrl = c.imageUrl;
+        const generalPlaceholder = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80";
+        if (!finalImageUrl || finalImageUrl === generalPlaceholder) {
+          const mainSportId = uniqueSportIds.length > 0 ? uniqueSportIds[0] : undefined;
+          finalImageUrl = getDefaultSportImage(c.name, c.description, mainSportId);
+        }
+
         return {
           ...c,
+          imageUrl: finalImageUrl,
           districtName: dist ? dist.name : "Hà Nội",
           sports: clusterSports,
           courtCount: clusterCourts.length,
@@ -193,8 +216,17 @@ async function startServer() {
       
       const pricingRules = pricingRulesAll.filter((pr: any) => pr.clusterId === cluster.id);
 
+      // Determine default image if not set or is general placeholder
+      let finalImageUrl = cluster.imageUrl;
+      const generalPlaceholder = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80";
+      if (!finalImageUrl || finalImageUrl === generalPlaceholder) {
+        const mainSportId = clusterCourts.length > 0 ? clusterCourts[0].sportId : undefined;
+        finalImageUrl = getDefaultSportImage(cluster.name, cluster.description, mainSportId);
+      }
+
       res.json({
         ...cluster,
+        imageUrl: finalImageUrl,
         districtName: dist ? dist.name : "Hà Nội",
         courts: clusterCourts,
         pricingRules
@@ -212,13 +244,14 @@ async function startServer() {
     }
 
     try {
+      const defaultImg = getDefaultSportImage(name, description);
       const newCluster = {
         id: "cc-" + Date.now(),
         ownerId,
         name,
         districtId,
         address,
-        imageUrl: imageUrl || "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80",
+        imageUrl: imageUrl || defaultImg,
         description,
         status: "pending" as const, // Pending admin approval
         createdAt: new Date().toISOString()
@@ -306,10 +339,17 @@ async function startServer() {
 
       // Generate slots from 05:00 to 22:00
       const slots = [];
+      const hanoi = getHanoiTime();
       for (let hour = 5; hour < 22; hour++) {
         // Check if this hour is already booked
-        const isBooked = activeBookings.some((b: any) => hour >= b.startHour && hour < b.endHour);
+        let isBooked = activeBookings.some((b: any) => hour >= b.startHour && hour < b.endHour);
         
+        // Check if this hour is in the past
+        const isPast = date < hanoi.dateStr || (date === hanoi.dateStr && hour <= hanoi.hour);
+        if (isPast) {
+          isBooked = true;
+        }
+
         // Calculate dynamic price for this specific hour
         let price = court.basePrice;
         const rule = rules.find((r: any) => hour >= r.startHour && hour < r.endHour);
@@ -321,6 +361,7 @@ async function startServer() {
           hour,
           label: `${hour.toString().padStart(2, "0")}:00 - ${(hour + 1).toString().padStart(2, "0")}:00`,
           isBooked,
+          isPast,
           price,
           isPeak: !!rule
         });
@@ -347,6 +388,12 @@ async function startServer() {
 
     if (startHour >= endHour) {
       return res.status(400).json({ error: "Giờ bắt đầu phải nhỏ hơn giờ kết thúc!" });
+    }
+
+    // Prevents booking slots in the past
+    const hanoi = getHanoiTime();
+    if (bookingDate < hanoi.dateStr || (bookingDate === hanoi.dateStr && startHour <= hanoi.hour)) {
+      return res.status(400).json({ error: "Không thể đặt sân vào khung giờ đã trôi qua trong ngày!" });
     }
 
     try {
@@ -490,12 +537,34 @@ async function startServer() {
 
   // Update booking status (owner or customer cancels, owner check-in)
   app.post("/api/bookings/:id/status", async (req, res) => {
-    const { status } = req.body;
+    const { status, byOwner } = req.body;
     if (!status) {
       return res.status(400).json({ error: "Trạng thái cập nhật không hợp lệ!" });
     }
 
     try {
+      if (status === "cancelled" && !byOwner) {
+        const bookingsAll = await db.getBookings();
+        const booking = bookingsAll.find((b: any) => b.id === req.params.id);
+        if (!booking) {
+          return res.status(404).json({ error: "Không tìm thấy lượt đặt sân!" });
+        }
+
+        const [year, month, day] = booking.bookingDate.split("-").map(Number);
+        // Hanoi is UTC+7, so start time in UTC is startHour - 7
+        const bookingUtcTime = Date.UTC(year, month - 1, day, booking.startHour - 7, 0, 0);
+        const currentUtcTime = Date.now();
+
+        const diffMs = bookingUtcTime - currentUtcTime;
+        const diffHours = diffMs / (1000 * 60 * 60);
+
+        if (diffHours < 4) {
+          return res.status(400).json({
+            error: "Bạn chỉ có thể hủy đặt sân trước giờ bắt đầu thi đấu ít nhất 4 tiếng!"
+          });
+        }
+      }
+
       await db.updateBookingStatus(req.params.id, status);
       
       const bookingsAll = await db.getBookings();
