@@ -82,11 +82,8 @@ export default function App() {
           <div>
             <h1 className="text-base font-display font-extrabold text-[#064E3B] tracking-tight flex items-center gap-1.5">
               SportZone Hà Nội
-              <span className="text-[9px] font-bold py-0.5 px-1.5 rounded-md bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 uppercase">
-                BTL PM
-              </span>
             </h1>
-            <p className="text-[10px] text-slate-500 tracking-wide font-sans">Đặt sân trực tuyến thời gian thực tại Thủ đô</p>
+            <p className="text-[10px] text-slate-500 tracking-wide font-sans">Đặt sân trực tuyến tại Thủ đô</p>
           </div>
         </div>
 
@@ -320,10 +317,8 @@ export default function App() {
       {/* Beautiful humble page footer */}
       <footer className="border-t border-[#E2E8F0] bg-white px-6 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <p>© 2026 SportZone Hà Nội. Bài tập lớn xuất sắc môn Quản lý dự án CNTT.</p>
+          <p>© 2026 SportZone Hà Nội.</p>
           <div className="flex gap-4 font-mono text-[10px] text-slate-400">
-            <span>DB ENGINE: JSON-Relational MOCK (3NF standard)</span>
-            <span>API PORT: 3000</span>
           </div>
         </div>
       </footer>
