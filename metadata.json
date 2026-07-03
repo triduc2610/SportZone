@@ -1,0 +1,6 @@
+{
+  "name": "SportZone Hà Nội",
+  "description": "Hệ thống đặt sân thể thao trực tuyến phục vụ riêng cho thị trường Hà Nội - Giải pháp tối ưu cho người chơi, chủ cụm sân và quản trị viên.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
