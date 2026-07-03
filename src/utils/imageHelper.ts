@@ -6,7 +6,7 @@ export const SPORT_IMAGES = {
   football: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80", // Football/soccer field
   badminton: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80", // Badminton court & rackets
   tennis: "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=800&q=80", // Tennis court & ball
-  pickleball: "https://images.unsplash.com/photo-1599447421416-3414500d18a5?auto=format&fit=crop&w=800&q=80", // Pickleball paddle/court
+  pickleball: "https://i.pinimg.com/1200x/14/e4/0f/14e40f8add45c16b856c1647038a9d60.jpg", // Pickleball direct image link
   general: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80" // General fallback
 };
 

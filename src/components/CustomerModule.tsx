@@ -168,6 +168,20 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
   };
 
   const handleCancelBooking = async (bookingId: string) => {
+    const booking = bookingHistory.find(b => b.id === bookingId);
+    if (booking) {
+      const [year, month, day] = booking.bookingDate.split("-").map(Number);
+      // Hanoi is UTC+7, so start time in UTC is startHour - 7
+      const bookingUtcTime = Date.UTC(year, month - 1, day, booking.startHour - 7, 0, 0);
+      const currentUtcTime = Date.now();
+      const diffHours = (bookingUtcTime - currentUtcTime) / (1000 * 60 * 60);
+
+      if (diffHours < 4) {
+        alert("Bạn chỉ có thể hủy đặt sân trước giờ bắt đầu thi đấu ít nhất 4 tiếng!");
+        return;
+      }
+    }
+
     if (!window.confirm('Bạn có chắc chắn muốn hủy lịch đặt sân này không?')) return;
     try {
       const res = await fetch(`/api/bookings/${bookingId}/status`, {
@@ -175,9 +189,12 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
       });
+      const data = await res.json();
       if (res.ok) {
         alert('Đã hủy lịch đặt sân thành công!');
         fetchBookingHistory();
+      } else {
+        alert(data.error || 'Có lỗi xảy ra khi hủy lịch.');
       }
     } catch (err) {
       alert('Có lỗi xảy ra khi hủy lịch.');

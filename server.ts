@@ -16,6 +16,19 @@ const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
 
+// Helper to get current Hanoi time (UTC+7)
+function getHanoiTime() {
+  const hanoiMs = Date.now() + 7 * 3600000;
+  const hanoiDate = new Date(hanoiMs);
+  const yyyy = hanoiDate.getUTCFullYear();
+  const mm = String(hanoiDate.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(hanoiDate.getUTCDate()).padStart(2, '0');
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+  const hour = hanoiDate.getUTCHours();
+  const minutes = hanoiDate.getUTCMinutes();
+  return { dateStr, hour, minutes };
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -326,10 +339,17 @@ async function startServer() {
 
       // Generate slots from 05:00 to 22:00
       const slots = [];
+      const hanoi = getHanoiTime();
       for (let hour = 5; hour < 22; hour++) {
         // Check if this hour is already booked
-        const isBooked = activeBookings.some((b: any) => hour >= b.startHour && hour < b.endHour);
+        let isBooked = activeBookings.some((b: any) => hour >= b.startHour && hour < b.endHour);
         
+        // Check if this hour is in the past
+        const isPast = date < hanoi.dateStr || (date === hanoi.dateStr && hour <= hanoi.hour);
+        if (isPast) {
+          isBooked = true;
+        }
+
         // Calculate dynamic price for this specific hour
         let price = court.basePrice;
         const rule = rules.find((r: any) => hour >= r.startHour && hour < r.endHour);
@@ -341,6 +361,7 @@ async function startServer() {
           hour,
           label: `${hour.toString().padStart(2, "0")}:00 - ${(hour + 1).toString().padStart(2, "0")}:00`,
           isBooked,
+          isPast,
           price,
           isPeak: !!rule
         });
@@ -367,6 +388,12 @@ async function startServer() {
 
     if (startHour >= endHour) {
       return res.status(400).json({ error: "Giờ bắt đầu phải nhỏ hơn giờ kết thúc!" });
+    }
+
+    // Prevents booking slots in the past
+    const hanoi = getHanoiTime();
+    if (bookingDate < hanoi.dateStr || (bookingDate === hanoi.dateStr && startHour <= hanoi.hour)) {
+      return res.status(400).json({ error: "Không thể đặt sân vào khung giờ đã trôi qua trong ngày!" });
     }
 
     try {
@@ -510,12 +537,34 @@ async function startServer() {
 
   // Update booking status (owner or customer cancels, owner check-in)
   app.post("/api/bookings/:id/status", async (req, res) => {
-    const { status } = req.body;
+    const { status, byOwner } = req.body;
     if (!status) {
       return res.status(400).json({ error: "Trạng thái cập nhật không hợp lệ!" });
     }
 
     try {
+      if (status === "cancelled" && !byOwner) {
+        const bookingsAll = await db.getBookings();
+        const booking = bookingsAll.find((b: any) => b.id === req.params.id);
+        if (!booking) {
+          return res.status(404).json({ error: "Không tìm thấy lượt đặt sân!" });
+        }
+
+        const [year, month, day] = booking.bookingDate.split("-").map(Number);
+        // Hanoi is UTC+7, so start time in UTC is startHour - 7
+        const bookingUtcTime = Date.UTC(year, month - 1, day, booking.startHour - 7, 0, 0);
+        const currentUtcTime = Date.now();
+
+        const diffMs = bookingUtcTime - currentUtcTime;
+        const diffHours = diffMs / (1000 * 60 * 60);
+
+        if (diffHours < 4) {
+          return res.status(400).json({
+            error: "Bạn chỉ có thể hủy đặt sân trước giờ bắt đầu thi đấu ít nhất 4 tiếng!"
+          });
+        }
+      }
+
       await db.updateBookingStatus(req.params.id, status);
       
       const bookingsAll = await db.getBookings();
