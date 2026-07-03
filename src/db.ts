@@ -76,6 +76,7 @@ export interface Review {
   rating: number;
   comment: string;
   createdAt: string;
+  bookingId?: string;
 }
 
 class Database {
@@ -382,12 +383,24 @@ class Database {
             id VARCHAR(50) PRIMARY KEY,
             user_id VARCHAR(50) NOT NULL,
             cum_san_id VARCHAR(50) NOT NULL,
+            booking_id VARCHAR(50) NULL,
             diem_danh_gia INT NOT NULL CHECK (diem_danh_gia >= 1 AND diem_danh_gia <= 5),
             noi_dung NVARCHAR(MAX),
             ngay_tao DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES nguoi_dung(id),
             FOREIGN KEY (cum_san_id) REFERENCES cum_san(id)
         );
+      `);
+
+      // Ensure booking_id column exists if table was already created
+      await this.pool.request().query(`
+        IF EXISTS (SELECT * FROM sysobjects WHERE name='danh_gia' AND xtype='U')
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('danh_gia') AND name = 'booking_id')
+            BEGIN
+                ALTER TABLE danh_gia ADD booking_id VARCHAR(50) NULL;
+            END
+        END
       `);
 
       // Seed core static tables (quan_huyen, bo_mon, and admin user) if empty
@@ -766,7 +779,7 @@ class Database {
     if (this.isSqlEnabled && this.pool) {
       let query = `
         SELECT r.id, r.user_id as userId, u.username, u.ho_ten as userFullName, 
-               r.cum_san_id as clusterId, r.diem_danh_gia as rating, r.noi_dung as comment, r.ngay_tao as createdAt
+               r.cum_san_id as clusterId, r.diem_danh_gia as rating, r.noi_dung as comment, r.ngay_tao as createdAt, r.booking_id as bookingId
         FROM danh_gia r
         JOIN nguoi_dung u ON r.user_id = u.id
       `;
@@ -801,12 +814,13 @@ class Database {
         .input("id", sql.VarChar(50), review.id)
         .input("userId", sql.VarChar(50), review.userId)
         .input("clusterId", sql.VarChar(50), review.clusterId)
+        .input("bookingId", sql.VarChar(50), review.bookingId || null)
         .input("rating", sql.Int, review.rating)
         .input("comment", sql.NVarChar(sql.MAX), review.comment)
         .input("createdAt", sql.DateTime, new Date(review.createdAt))
         .query(`
-          INSERT INTO danh_gia (id, user_id, cum_san_id, diem_danh_gia, noi_dung, ngay_tao)
-          VALUES (@id, @userId, @clusterId, @rating, @comment, @createdAt)
+          INSERT INTO danh_gia (id, user_id, cum_san_id, booking_id, diem_danh_gia, noi_dung, ngay_tao)
+          VALUES (@id, @userId, @clusterId, @bookingId, @rating, @comment, @createdAt)
         `);
       return review;
     }

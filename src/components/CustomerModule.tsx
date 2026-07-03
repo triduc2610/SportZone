@@ -73,6 +73,18 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
   useEffect(() => {
     if (user) {
       fetchBookingHistory();
+      // Fetch user's reviews to identify reviewed bookings
+      fetch('/api/reviews')
+        .then(res => res.json())
+        .then(reviews => {
+          if (Array.isArray(reviews)) {
+            const userReviewedBookingIds = reviews
+              .filter((r: any) => r.userId === user.id && r.bookingId)
+              .map((r: any) => r.bookingId);
+            setReviewedBookings(userReviewedBookingIds);
+          }
+        })
+        .catch(err => console.error("Error loading reviews:", err));
     }
   }, [user, activeTab]);
 
@@ -264,7 +276,8 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
           userId: user.id,
           clusterId: booking.clusterId,
           rating: ratingValue,
-          comment: ratingComment
+          comment: ratingComment,
+          bookingId: booking.id
         })
       });
 

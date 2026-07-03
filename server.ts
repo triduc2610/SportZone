@@ -315,12 +315,21 @@ async function startServer() {
   });
 
   app.post("/api/reviews", async (req, res) => {
-    const { userId, clusterId, rating, comment } = req.body;
+    const { userId, clusterId, rating, comment, bookingId } = req.body;
     if (!userId || !clusterId || !rating) {
       return res.status(400).json({ error: "Thông tin đánh giá không đầy đủ!" });
     }
 
     try {
+      // Validate booking duplicate reviews
+      if (bookingId) {
+        const reviewsAll = await db.getReviews();
+        const alreadyReviewed = reviewsAll.some((r: any) => r.bookingId === bookingId);
+        if (alreadyReviewed) {
+          return res.status(400).json({ error: "Lịch đặt sân này đã được đánh giá trước đó! Mỗi lượt chơi chỉ được đánh giá duy nhất một lần." });
+        }
+      }
+
       // Validate that the user has a completed booking ("checked_in" status) for any court in this cluster
       const bookings = await db.getBookings();
       const courts = await db.getCourts();
@@ -346,6 +355,7 @@ async function startServer() {
         username,
         userFullName,
         clusterId,
+        bookingId: bookingId || undefined,
         rating: Number(rating),
         comment: comment || "",
         createdAt: new Date().toISOString()

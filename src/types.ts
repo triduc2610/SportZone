@@ -107,4 +107,5 @@ export interface Review {
   rating: number; // 1-5
   comment: string;
   createdAt: string;
+  bookingId?: string;
 }
