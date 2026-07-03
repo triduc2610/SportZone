@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { db } from "./src/db";
+import { getDefaultSportImage } from "./src/utils/imageHelper";
 
 // Load environment variables
 dotenv.config();
@@ -154,8 +155,17 @@ async function startServer() {
         const uniqueSportIds = Array.from(new Set(clusterCourts.map((crt: any) => crt.sportId)));
         const clusterSports = sports.filter((s: any) => uniqueSportIds.includes(s.id));
 
+        // Determine default image if not set or is general placeholder
+        let finalImageUrl = c.imageUrl;
+        const generalPlaceholder = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80";
+        if (!finalImageUrl || finalImageUrl === generalPlaceholder) {
+          const mainSportId = uniqueSportIds.length > 0 ? uniqueSportIds[0] : undefined;
+          finalImageUrl = getDefaultSportImage(c.name, c.description, mainSportId);
+        }
+
         return {
           ...c,
+          imageUrl: finalImageUrl,
           districtName: dist ? dist.name : "Hà Nội",
           sports: clusterSports,
           courtCount: clusterCourts.length,
@@ -193,8 +203,17 @@ async function startServer() {
       
       const pricingRules = pricingRulesAll.filter((pr: any) => pr.clusterId === cluster.id);
 
+      // Determine default image if not set or is general placeholder
+      let finalImageUrl = cluster.imageUrl;
+      const generalPlaceholder = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80";
+      if (!finalImageUrl || finalImageUrl === generalPlaceholder) {
+        const mainSportId = clusterCourts.length > 0 ? clusterCourts[0].sportId : undefined;
+        finalImageUrl = getDefaultSportImage(cluster.name, cluster.description, mainSportId);
+      }
+
       res.json({
         ...cluster,
+        imageUrl: finalImageUrl,
         districtName: dist ? dist.name : "Hà Nội",
         courts: clusterCourts,
         pricingRules
@@ -212,13 +231,14 @@ async function startServer() {
     }
 
     try {
+      const defaultImg = getDefaultSportImage(name, description);
       const newCluster = {
         id: "cc-" + Date.now(),
         ownerId,
         name,
         districtId,
         address,
-        imageUrl: imageUrl || "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80",
+        imageUrl: imageUrl || defaultImg,
         description,
         status: "pending" as const, // Pending admin approval
         createdAt: new Date().toISOString()

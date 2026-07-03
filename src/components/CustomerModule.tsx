@@ -345,10 +345,24 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                 >
                   <div className="relative h-44 overflow-hidden bg-slate-100">
                     <img 
-                      src={cluster.imageUrl} 
+                      src={cluster.imageUrl || "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80"} 
                       alt={cluster.name}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        const name = (cluster.name || "").toLowerCase();
+                        const desc = (cluster.description || "").toLowerCase();
+                        if (name.includes("cầu lông") || name.includes("badminton") || desc.includes("cầu lông")) {
+                          target.src = "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80";
+                        } else if (name.includes("tennis") || name.includes("quần vợt") || desc.includes("tennis")) {
+                          target.src = "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=800&q=80";
+                        } else if (name.includes("pickleball") || name.includes("pickle") || desc.includes("pickle")) {
+                          target.src = "https://images.unsplash.com/photo-1599447421416-3414500d18a5?auto=format&fit=crop&w=800&q=80";
+                        } else {
+                          target.src = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80";
+                        }
+                      }}
                     />
                     <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-bold text-[#064E3B] border border-[#E2E8F0] flex items-center gap-1 shadow-xs">
                       <MapPin size={10} className="text-[#10B981]" />
@@ -406,10 +420,24 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
               <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden shadow-xs">
                 <div className="h-48 md:h-64 relative bg-slate-100">
                   <img 
-                    src={selectedCluster.imageUrl} 
+                    src={selectedCluster.imageUrl || "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80"} 
                     alt={selectedCluster.name}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      const name = (selectedCluster.name || "").toLowerCase();
+                      const desc = (selectedCluster.description || "").toLowerCase();
+                      if (name.includes("cầu lông") || name.includes("badminton") || desc.includes("cầu lông")) {
+                        target.src = "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80";
+                      } else if (name.includes("tennis") || name.includes("quần vợt") || desc.includes("tennis")) {
+                        target.src = "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=800&q=80";
+                      } else if (name.includes("pickleball") || name.includes("pickle") || desc.includes("pickle")) {
+                        target.src = "https://images.unsplash.com/photo-1599447421416-3414500d18a5?auto=format&fit=crop&w=800&q=80";
+                      } else {
+                        target.src = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80";
+                      }
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                   <div className="absolute bottom-6 left-6 right-6">

@@ -134,7 +134,7 @@ class Database {
             name: "Pickleball Club Mỹ Đình",
             districtId: "d-5",
             address: "Khu liên hợp thể thao Mỹ Đình, Lê Đức Thọ, Nam Từ Liêm, Hà Nội",
-            imageUrl: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80",
+            imageUrl: "https://images.unsplash.com/photo-1599447421416-3414500d18a5?auto=format&fit=crop&w=800&q=80",
             description: "Cụm sân Pickleball mới 100% ngoài trời có mái che, môn thể thao thịnh hành nhất hiện nay. Hỗ trợ cho thuê vợt và bóng đạt chuẩn.",
             status: "approved",
             createdAt: new Date("2026-06-14").toISOString()
