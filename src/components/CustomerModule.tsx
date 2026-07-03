@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, CourtCluster, Court, PricingRule, Booking, BookingStatus } from '../types';
 import { 
   Search, MapPin, Calendar, Clock, CreditCard, Flame, Activity, Sparkles, 
-  Target, DollarSign, ChevronRight, MessageSquare, Send, CheckCircle, 
+  Target, DollarSign, ChevronRight, ChevronLeft, MessageSquare, Send, CheckCircle, 
   AlertCircle, X, Info, Phone, ArrowLeft 
 } from 'lucide-react';
 
@@ -19,11 +19,19 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
   const [sports, setSports] = useState<any[]>([]);
   const [clusters, setClusters] = useState<any[]>([]);
   
-  // Filters
+  // Filters and Pagination
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
   const [selectedSport, setSelectedSport] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>(''); // '', 'rating_desc', 'price_desc', 'price_asc'
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const CARDS_PER_PAGE = 6;
   
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDistrict, selectedSport, searchQuery, sortBy]);
+
   // Selection States
   const [selectedCluster, setSelectedCluster] = useState<any | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<any | null>(null);
@@ -85,6 +93,40 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
       .then(res => res.json())
       .then(setBookingHistory);
   };
+
+  // Process sorting and pagination of clusters
+  const processedClusters = useMemo(() => {
+    let result = [...clusters];
+    if (sortBy === 'rating_desc') {
+      result.sort((a, b) => {
+        const rA = Number(a.avgRating) || 0;
+        const rB = Number(b.avgRating) || 0;
+        return rB - rA;
+      });
+    } else if (sortBy === 'price_desc') {
+      result.sort((a, b) => {
+        const pA = Number(a.minPrice) || 0;
+        const pB = Number(b.minPrice) || 0;
+        return pB - pA;
+      });
+    } else if (sortBy === 'price_asc') {
+      result.sort((a, b) => {
+        const pA = Number(a.minPrice) || 0;
+        const pB = Number(b.minPrice) || 0;
+        return pA - pB;
+      });
+    }
+    return result;
+  }, [clusters, sortBy]);
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(processedClusters.length / CARDS_PER_PAGE);
+  }, [processedClusters]);
+
+  const paginatedClusters = useMemo(() => {
+    const startIndex = (currentPage - 1) * CARDS_PER_PAGE;
+    return processedClusters.slice(startIndex, startIndex + CARDS_PER_PAGE);
+  }, [processedClusters, currentPage]);
 
   // Fetch slots when court or date changes
   useEffect(() => {
@@ -352,7 +394,7 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
               Tìm kiếm sân bóng, cầu lông, pickleball trống tại Hà Nội
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               {/* Search input */}
               <div className="relative">
                 <input
@@ -394,13 +436,25 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+
+              {/* Sort Filter */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-700 focus:outline-none focus:border-[#10B981] cursor-pointer transition-colors"
+              >
+                <option value="">-- Sắp xếp mặc định --</option>
+                <option value="rating_desc">Đánh giá từ cao đến thấp ★</option>
+                <option value="price_desc">Giá từ cao đến thấp ₫</option>
+                <option value="price_asc">Giá từ thấp đến cao ₫</option>
+              </select>
             </div>
           </div>
 
           {/* Court Clusters List */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {clusters.length > 0 ? (
-              clusters.map(cluster => (
+            {processedClusters.length > 0 ? (
+              paginatedClusters.map(cluster => (
                 <div 
                   key={cluster.id}
                   onClick={() => handleSelectCluster(cluster.id)}
@@ -438,8 +492,10 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-sm font-display font-bold text-slate-800 group-hover:text-[#10B981] transition-colors line-clamp-1">{cluster.name}</h3>
                         <div className="flex items-center gap-0.5 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 shrink-0">
-                          <span className="text-amber-500 text-[10px]">★</span>
-                          <span className="text-[10px] text-slate-700 font-extrabold">{cluster.avgRating ? cluster.avgRating : '5.0'}</span>
+                          <span className={cluster.avgRating && cluster.avgRating > 0 ? "text-amber-500 text-[10px]" : "text-slate-300 text-[10px]"}>★</span>
+                          <span className="text-[10px] text-slate-700 font-extrabold">
+                            {cluster.avgRating && cluster.avgRating > 0 ? cluster.avgRating : 'Chưa có'}
+                          </span>
                         </div>
                       </div>
                       <p className="text-slate-500 text-xs line-clamp-2 leading-relaxed">{cluster.description}</p>
@@ -468,6 +524,51 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
               </div>
             )}
           </div>
+
+          {/* Pagination Component */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-8 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className={`p-2 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                  currentPage === 1
+                    ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                    : 'bg-white border-slate-200 text-slate-600 hover:text-[#10B981] hover:border-[#10B981]/50'
+                }`}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-9 h-9 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      currentPage === page
+                        ? 'bg-[#10B981] text-white shadow-xs border border-[#10B981]'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:text-[#10B981] hover:border-[#10B981]/50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className={`p-2 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                  currentPage === totalPages
+                    ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                    : 'bg-white border-slate-200 text-slate-600 hover:text-[#10B981] hover:border-[#10B981]/50'
+                }`}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -514,11 +615,18 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                       <span className="bg-[#10B981]/20 backdrop-blur-md text-[#10B981] border border-[#10B981]/30 text-[10px] px-2.5 py-0.5 rounded-md font-bold shadow-xs">
                         {selectedCluster.districtName}
                       </span>
-                      <div className="flex items-center gap-1 bg-amber-500/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-amber-300 border border-amber-500/30">
-                        <span>★</span>
-                        <span>{selectedCluster.avgRating ? selectedCluster.avgRating : '5.0'}</span>
-                        <span className="opacity-75 font-normal">({selectedCluster.reviewCount || 0} đánh giá)</span>
-                      </div>
+                      {selectedCluster.reviewCount && selectedCluster.reviewCount > 0 ? (
+                        <div className="flex items-center gap-1 bg-amber-500/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                          <span>★</span>
+                          <span>{selectedCluster.avgRating} / 5.0</span>
+                          <span className="opacity-75 font-normal">({selectedCluster.reviewCount} đánh giá)</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 bg-slate-500/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-slate-300 border border-slate-500/30">
+                          <span>★</span>
+                          <span className="opacity-95 font-medium italic">Chưa có đánh giá</span>
+                        </div>
+                      )}
                     </div>
                     <h1 className="text-lg md:text-xl font-display font-extrabold text-white leading-tight">{selectedCluster.name}</h1>
                     <p className="text-slate-200 text-xs mt-1 flex items-center gap-1.5">
@@ -560,10 +668,15 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                   <div className="border-t border-slate-100 pt-5 space-y-4">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Đánh giá & Bình luận ({selectedCluster.reviews?.length || 0})</h4>
-                      {selectedCluster.avgRating > 0 && (
+                      {selectedCluster.avgRating && selectedCluster.avgRating > 0 ? (
                         <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
                           <span className="text-amber-500 text-xs">★</span>
                           <span className="text-xs text-slate-700 font-extrabold">{selectedCluster.avgRating} / 5.0</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                          <span className="text-slate-400 text-[10px]">★</span>
+                          <span className="text-[10px] text-slate-500 italic">Chưa có đánh giá</span>
                         </div>
                       )}
                     </div>
@@ -593,8 +706,12 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                        <p className="text-xs text-slate-400 italic">Chưa có đánh giá nào cho cụm sân này. Hoàn thành lịch đặt và để lại đánh giá đầu tiên của bạn!</p>
+                      <div className="text-center py-8 px-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200/80 space-y-2">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                          <MessageSquare size={18} />
+                        </div>
+                        <h5 className="text-xs font-bold text-slate-700">Chưa có đánh giá & bình luận</h5>
+                        <p className="text-[11px] text-slate-400 max-w-xs mx-auto">Cụm sân này chưa nhận được lượt phản hồi nào từ người chơi. Đặt lịch thi đấu và trải nghiệm để để lại lời nhận xét đầu tiên của bạn!</p>
                       </div>
                     )}
                   </div>
