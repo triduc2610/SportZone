@@ -44,6 +44,20 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
   // Owner analytics state
   const [stats, setStats] = useState<any | null>(null);
 
+  // Edit Cluster states
+  const [isEditingCluster, setIsEditingCluster] = useState(false);
+  const [editClusterName, setEditClusterName] = useState('');
+  const [editClusterDistrictId, setEditClusterDistrictId] = useState('');
+  const [editClusterAddress, setEditClusterAddress] = useState('');
+  const [editClusterDesc, setEditClusterDesc] = useState('');
+  const [editClusterImage, setEditClusterImage] = useState('');
+
+  // Edit Court states
+  const [editingCourtId, setEditingCourtId] = useState<string | null>(null);
+  const [editCourtName, setEditCourtName] = useState('');
+  const [editCourtSportId, setEditCourtSportId] = useState('');
+  const [editCourtBasePrice, setEditCourtBasePrice] = useState('');
+
   useEffect(() => {
     fetch('/api/districts').then(res => res.json()).then(setDistricts);
     fetch('/api/sports').then(res => res.json()).then(setSports);
@@ -58,7 +72,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
     fetch('/api/admin/clusters')
       .then(res => res.json())
       .then(allClusters => {
-        const mine = allClusters.filter((c: any) => c.ownerId === user.id);
+        const mine = user.role === 'admin' ? allClusters : allClusters.filter((c: any) => c.ownerId === user.id);
         setMyClusters(mine);
         if (mine.length > 0 && !selectedCluster) {
           handleSelectCluster(mine[0].id);
@@ -150,6 +164,124 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
       }
     } catch {
       alert('Có lỗi xảy ra khi thêm sân con.');
+    }
+  };
+
+  const handleDeleteCluster = async (clusterId: string) => {
+    if (!window.confirm("CẢNH BÁO: Bạn có chắc chắn muốn xóa toàn bộ cụm sân thể thao này?\nHành động này sẽ xóa vĩnh viễn tất cả sân con, giờ vàng, lượt đặt sân và không thể khôi phục!")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/clusters/${clusterId}`, {
+        method: "DELETE"
+      });
+
+      if (res.ok) {
+        alert("Xóa cụm sân thành công!");
+        setSelectedCluster(null);
+        fetchMyClusters();
+        fetchStats();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Có lỗi xảy ra khi xóa cụm sân.");
+      }
+    } catch {
+      alert("Lỗi kết nối máy chủ khi xóa cụm sân.");
+    }
+  };
+
+  const handleUpdateCluster = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCluster) return;
+
+    if (!editClusterName || !editClusterDistrictId || !editClusterAddress || !editClusterDesc) {
+      alert("Vui lòng nhập đầy đủ thông tin cụm sân!");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/clusters/${selectedCluster.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editClusterName,
+          districtId: editClusterDistrictId,
+          address: editClusterAddress,
+          description: editClusterDesc,
+          imageUrl: editClusterImage
+        })
+      });
+
+      if (res.ok) {
+        alert("Cập nhật cụm sân thành công!");
+        setIsEditingCluster(false);
+        handleSelectCluster(selectedCluster.id);
+        fetchMyClusters();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Có lỗi xảy ra khi cập nhật cụm sân.");
+      }
+    } catch {
+      alert("Lỗi kết nối máy chủ khi cập nhật cụm sân.");
+    }
+  };
+
+  const handleDeleteCourt = async (courtId: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa sân con này không?\nHành động này sẽ hủy tất cả các lịch đặt hiện tại của sân con này!")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/courts/${courtId}`, {
+        method: "DELETE"
+      });
+
+      if (res.ok) {
+        alert("Xóa sân con thành công!");
+        if (selectedCluster) {
+          handleSelectCluster(selectedCluster.id);
+        }
+        fetchStats();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Có lỗi xảy ra khi xóa sân con.");
+      }
+    } catch {
+      alert("Lỗi kết nối máy chủ khi xóa sân con.");
+    }
+  };
+
+  const handleUpdateCourt = async (courtId: string) => {
+    if (!editCourtName || !editCourtSportId || !editCourtBasePrice) {
+      alert("Vui lòng nhập đầy đủ thông tin sân con!");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/courts/${courtId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editCourtName,
+          sportId: editCourtSportId,
+          basePrice: Number(editCourtBasePrice)
+        })
+      });
+
+      if (res.ok) {
+        alert("Cập nhật sân con thành công!");
+        setEditingCourtId(null);
+        if (selectedCluster) {
+          handleSelectCluster(selectedCluster.id);
+        }
+        fetchStats();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Có lỗi xảy ra khi cập nhật sân con.");
+      }
+    } catch {
+      alert("Lỗi kết nối máy chủ khi cập nhật sân con.");
     }
   };
 
@@ -408,7 +540,26 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                     </p>
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        setIsEditingCluster(true);
+                        setEditClusterName(selectedCluster.name);
+                        setEditClusterDistrictId(selectedCluster.districtId);
+                        setEditClusterAddress(selectedCluster.address);
+                        setEditClusterDesc(selectedCluster.description || '');
+                        setEditClusterImage(selectedCluster.imageUrl || '');
+                      }}
+                      className="py-1.5 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white font-bold text-xs cursor-pointer flex items-center gap-1"
+                    >
+                      Sửa cụm
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCluster(selectedCluster.id)}
+                      className="py-1.5 px-3 rounded-lg bg-slate-950 border border-rose-950/40 text-rose-400 hover:bg-rose-950/20 font-bold text-xs cursor-pointer flex items-center gap-1"
+                    >
+                      Xóa cụm
+                    </button>
                     <button
                       onClick={() => setShowCourtForm(!showCourtForm)}
                       className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs cursor-pointer flex items-center gap-1.5"
@@ -426,9 +577,94 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                   </div>
                 </div>
 
-                {/* Adding a new Court (Sân con) Form */}
-                {showCourtForm && (
-                  <form onSubmit={handleCreateCourt} className="p-4 bg-slate-950 border border-slate-850 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4 items-end animate-fade-in">
+                {isEditingCluster ? (
+                  <form onSubmit={handleUpdateCluster} className="space-y-4 bg-slate-950 p-5 rounded-xl border border-slate-850 animate-fade-in">
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Building size={14} className="text-emerald-400" />
+                      Chỉnh sửa thông tin Cụm sân
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Tên cụm sân</label>
+                        <input
+                          type="text"
+                          required
+                          value={editClusterName}
+                          onChange={(e) => setEditClusterName(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Quận/Huyện Hà Nội</label>
+                        <select
+                          required
+                          value={editClusterDistrictId}
+                          onChange={(e) => setEditClusterDistrictId(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-3 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="">Chọn quận huyện...</option>
+                          {districts.map(d => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] text-slate-400 mb-1">Địa chỉ chi tiết</label>
+                        <input
+                          type="text"
+                          required
+                          value={editClusterAddress}
+                          onChange={(e) => setEditClusterAddress(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] text-slate-400 mb-1">Ảnh đại diện (URL)</label>
+                        <input
+                          type="url"
+                          value={editClusterImage}
+                          onChange={(e) => setEditClusterImage(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] text-slate-400 mb-1">Mô tả giới thiệu dịch vụ</label>
+                        <textarea
+                          required
+                          rows={3}
+                          value={editClusterDesc}
+                          onChange={(e) => setEditClusterDesc(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-emerald-500 resize-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 justify-end pt-2 border-t border-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingCluster(false)}
+                        className="px-4 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 rounded-lg text-xs cursor-pointer"
+                      >
+                        Hủy bỏ
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs cursor-pointer"
+                      >
+                        Cập nhật cụm sân
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    {/* Adding a new Court (Sân con) Form */}
+                    {showCourtForm && (
+                      <form onSubmit={handleCreateCourt} className="p-4 bg-slate-950 border border-slate-850 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4 items-end animate-fade-in">
                     <div>
                       <label className="block text-[10px] text-slate-400 mb-1">Tên sân con</label>
                       <input
@@ -549,24 +785,105 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {selectedCluster.courts && selectedCluster.courts.length > 0 ? (
-                        selectedCluster.courts.map((court: any) => (
-                          <div key={court.id} className="p-4 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-                                {getSportIcon(court.sportId)}
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-white">{court.name}</h4>
-                                <span className="text-[10px] text-slate-500 font-sans">{court.sportName}</span>
-                              </div>
-                            </div>
+                        selectedCluster.courts.map((court: any) => {
+                          const isEditing = editingCourtId === court.id;
+                          return (
+                            <div key={court.id} className="p-4 bg-slate-950 border border-slate-850 rounded-xl flex flex-col gap-3">
+                              {isEditing ? (
+                                <div className="space-y-3 w-full">
+                                  <div>
+                                    <label className="block text-[9px] text-slate-400 mb-0.5">Tên sân con</label>
+                                    <input
+                                      type="text"
+                                      value={editCourtName}
+                                      onChange={(e) => setEditCourtName(e.target.value)}
+                                      className="w-full bg-slate-900 border border-slate-800 rounded py-1 px-2 text-xs text-white"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="block text-[9px] text-slate-400 mb-0.5">Bộ môn</label>
+                                      <select
+                                        value={editCourtSportId}
+                                        onChange={(e) => setEditCourtSportId(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-800 rounded py-1 px-2 text-xs text-slate-300"
+                                      >
+                                        {sports.map(s => (
+                                          <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[9px] text-slate-400 mb-0.5">Giá gốc/giờ</label>
+                                      <input
+                                        type="number"
+                                        value={editCourtBasePrice}
+                                        onChange={(e) => setEditCourtBasePrice(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-800 rounded py-1 px-2 text-xs text-white"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex justify-end gap-1.5 pt-1.5 border-t border-slate-900">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCourtId(null)}
+                                      className="py-1 px-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 rounded text-[10px] cursor-pointer"
+                                    >
+                                      Hủy
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateCourt(court.id)}
+                                      className="py-1 px-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded text-[10px] font-bold cursor-pointer"
+                                    >
+                                      Lưu
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between gap-2 w-full">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 shrink-0">
+                                      {getSportIcon(court.sportId)}
+                                    </div>
+                                    <div>
+                                      <h4 className="text-xs font-bold text-white leading-tight">{court.name}</h4>
+                                      <span className="text-[10px] text-slate-500 font-sans block mt-0.5">{court.sportName}</span>
+                                    </div>
+                                  </div>
 
-                            <div className="text-right">
-                              <span className="text-[10px] text-slate-500 block">Đơn giá cơ bản</span>
-                              <span className="text-xs font-semibold text-emerald-400">{formatVND(court.basePrice)}/h</span>
+                                  <div className="flex flex-col items-end gap-2 shrink-0">
+                                    <div className="text-right">
+                                      <span className="text-[9px] text-slate-500 block">Đơn giá cơ bản</span>
+                                      <span className="text-xs font-semibold text-emerald-400">{formatVND(court.basePrice)}/h</span>
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingCourtId(court.id);
+                                          setEditCourtName(court.name);
+                                          setEditCourtSportId(court.sportId);
+                                          setEditCourtBasePrice(court.basePrice.toString());
+                                        }}
+                                        className="text-[9px] bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 px-2 py-0.5 rounded cursor-pointer hover:text-emerald-400 transition-colors"
+                                      >
+                                        Sửa
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteCourt(court.id)}
+                                        className="text-[9px] bg-slate-900 hover:bg-rose-950 hover:text-rose-400 border border-slate-800 text-slate-500 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                                      >
+                                        Xóa
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="col-span-full py-8 text-center text-xs text-slate-600">
                           Chưa khai báo sân con nào. Vui lòng bấm "Thêm sân con" phía trên!
@@ -601,6 +918,8 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                     )}
                   </div>
                 </div>
+                </>
+                )}
               </div>
             ) : (
               <div className="py-16 text-center bg-slate-900 border border-slate-800 rounded-2xl">

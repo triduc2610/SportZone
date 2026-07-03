@@ -67,6 +67,17 @@ export interface Booking {
   createdAt: string;
 }
 
+export interface Review {
+  id: string;
+  userId: string;
+  username: string;
+  userFullName: string;
+  clusterId: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
 class Database {
   private isSqlEnabled: boolean = false;
   private pool: sql.ConnectionPool | null = null;
@@ -164,12 +175,39 @@ class Database {
             paymentMethod: "momo",
             createdAt: new Date("2026-06-30T10:00:00Z").toISOString()
           }
+        ],
+        reviews: [
+          {
+            id: "rev-1",
+            userId: "cust-1",
+            username: "khachhang",
+            userFullName: "Nguyễn Văn Hùng",
+            clusterId: "cc-1",
+            rating: 5,
+            comment: "Sân bóng cỏ nhân tạo rất mướt, hệ thống chiếu sáng tốt và nhân viên nhiệt tình!",
+            createdAt: new Date("2026-07-02T15:30:00Z").toISOString()
+          },
+          {
+            id: "rev-2",
+            userId: "cust-2",
+            username: "player_hn",
+            userFullName: "Trần Minh Đức",
+            clusterId: "cc-1",
+            rating: 4,
+            comment: "Vị trí đẹp, dễ tìm, tuy nhiên giờ cao điểm hơi đông một chút.",
+            createdAt: new Date("2026-07-02T18:45:00Z").toISOString()
+          }
         ]
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(seedData, null, 2), "utf-8");
       return seedData;
     }
-    return JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+    const data = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+    if (!data.reviews) {
+      data.reviews = [];
+      fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+    }
+    return data;
   }
 
   private saveJsonDB(data: any) {
@@ -337,6 +375,21 @@ class Database {
         WHERE trang_thai != 'cancelled';
       `);
 
+      // 9. danh_gia table
+      await this.pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='danh_gia' AND xtype='U')
+        CREATE TABLE danh_gia (
+            id VARCHAR(50) PRIMARY KEY,
+            user_id VARCHAR(50) NOT NULL,
+            cum_san_id VARCHAR(50) NOT NULL,
+            diem_danh_gia INT NOT NULL CHECK (diem_danh_gia >= 1 AND diem_danh_gia <= 5),
+            noi_dung NVARCHAR(MAX),
+            ngay_tao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES nguoi_dung(id) ON DELETE CASCADE,
+            FOREIGN KEY (cum_san_id) REFERENCES cum_san(id) ON DELETE CASCADE
+        );
+      `);
+
       // Seed core static tables (quan_huyen, bo_mon, and admin user) if empty
       const districtCheck = await this.pool.request().query("SELECT COUNT(*) as count FROM quan_huyen");
       if (districtCheck.recordset[0].count === 0) {
@@ -427,6 +480,19 @@ class Database {
             .input("trang_thai", sql.VarChar(30), b.status)
             .input("phuong_thuc_thanh_toan", sql.NVarChar(50), b.paymentMethod)
             .query("INSERT INTO lich_dat (id, customer_id, san_con_id, ngay_dat, gio_bat_dau, gio_ket_thuc, tong_tien, trang_thai, phuong_thuc_thanh_toan) VALUES (@id, @customer_id, @san_con_id, @ngay_dat, @gio_bat_dau, @gio_ket_thuc, @tong_tien, @trang_thai, @phuong_thuc_thanh_toan)");
+        }
+
+        // Default Reviews
+        const reviewsJson = this.loadJsonDB().reviews || [];
+        for (const r of reviewsJson) {
+          await this.pool.request()
+            .input("id", sql.VarChar(50), r.id)
+            .input("user_id", sql.VarChar(50), r.userId)
+            .input("cum_san_id", sql.VarChar(50), r.clusterId)
+            .input("diem_danh_gia", sql.Int, r.rating)
+            .input("noi_dung", sql.NVarChar(sql.MAX), r.comment)
+            .input("ngay_tao", sql.DateTime, new Date(r.createdAt))
+            .query("INSERT INTO danh_gia (id, user_id, cum_san_id, diem_danh_gia, noi_dung, ngay_tao) VALUES (@id, @user_id, @cum_san_id, @diem_danh_gia, @noi_dung, @ngay_tao)");
         }
 
         console.log("SQL Server seed completed successfully!");
@@ -693,6 +759,156 @@ class Database {
       db.bookings[idx].status = status;
       this.saveJsonDB(db);
     }
+  }
+
+  // --- Reviews (Đánh giá) ---
+  public async getReviews(clusterId?: string): Promise<Review[]> {
+    if (this.isSqlEnabled && this.pool) {
+      let query = `
+        SELECT r.id, r.user_id as userId, u.username, u.full_name as userFullName, 
+               r.cum_san_id as clusterId, r.diem_danh_gia as rating, r.noi_dung as comment, r.ngay_tao as createdAt
+        FROM danh_gia r
+        JOIN nguoi_dung u ON r.user_id = u.id
+      `;
+      if (clusterId) {
+        query += " WHERE r.cum_san_id = @clusterId";
+      }
+      query += " ORDER BY r.ngay_tao DESC";
+
+      const req = this.pool.request();
+      if (clusterId) {
+        req.input("clusterId", sql.VarChar(50), clusterId);
+      }
+      const res = await req.query(query);
+      return res.recordset.map((row: any) => ({
+        ...row,
+        createdAt: new Date(row.createdAt).toISOString()
+      }));
+    }
+
+    const db = this.loadJsonDB();
+    let reviews: Review[] = db.reviews || [];
+    if (clusterId) {
+      reviews = reviews.filter((r: Review) => r.clusterId === clusterId);
+    }
+    // sort by createdAt desc
+    return [...reviews].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public async addReview(review: Review): Promise<Review> {
+    if (this.isSqlEnabled && this.pool) {
+      await this.pool.request()
+        .input("id", sql.VarChar(50), review.id)
+        .input("userId", sql.VarChar(50), review.userId)
+        .input("clusterId", sql.VarChar(50), review.clusterId)
+        .input("rating", sql.Int, review.rating)
+        .input("comment", sql.NVarChar(sql.MAX), review.comment)
+        .input("createdAt", sql.DateTime, new Date(review.createdAt))
+        .query(`
+          INSERT INTO danh_gia (id, user_id, cum_san_id, diem_danh_gia, noi_dung, ngay_tao)
+          VALUES (@id, @userId, @clusterId, @rating, @comment, @createdAt)
+        `);
+      return review;
+    }
+
+    const db = this.loadJsonDB();
+    if (!db.reviews) db.reviews = [];
+    db.reviews.push(review);
+    this.saveJsonDB(db);
+    return review;
+  }
+
+  // --- Edit & Delete Clusters ---
+  public async updateCluster(id: string, name: string, districtId: string, address: string, description: string, imageUrl: string): Promise<void> {
+    if (this.isSqlEnabled && this.pool) {
+      await this.pool.request()
+        .input("id", sql.VarChar(50), id)
+        .input("name", sql.NVarChar(150), name)
+        .input("districtId", sql.VarChar(50), districtId)
+        .input("address", sql.NVarChar(255), address)
+        .input("description", sql.NVarChar(sql.MAX), description)
+        .input("imageUrl", sql.VarChar(255), imageUrl)
+        .query(`
+          UPDATE cum_san 
+          SET ten_cum_san = @name, quan_huyen_id = @districtId, dia_chi_chi_tiet = @address, mo_ta = @description, image_url = @imageUrl 
+          WHERE id = @id
+        `);
+      return;
+    }
+
+    const db = this.loadJsonDB();
+    const idx = db.court_clusters.findIndex((c: any) => c.id === id);
+    if (idx !== -1) {
+      db.court_clusters[idx] = {
+        ...db.court_clusters[idx],
+        name,
+        districtId,
+        address,
+        description,
+        imageUrl
+      };
+      this.saveJsonDB(db);
+    }
+  }
+
+  public async deleteCluster(id: string): Promise<void> {
+    if (this.isSqlEnabled && this.pool) {
+      await this.pool.request()
+        .input("id", sql.VarChar(50), id)
+        .query("DELETE FROM cum_san WHERE id = @id");
+      return;
+    }
+
+    const db = this.loadJsonDB();
+    db.court_clusters = db.court_clusters.filter((c: any) => c.id !== id);
+    db.courts = db.courts.filter((c: any) => c.clusterId !== id);
+    db.pricing_rules = db.pricing_rules.filter((r: any) => r.clusterId !== id);
+    if (db.reviews) {
+      db.reviews = db.reviews.filter((r: any) => r.clusterId !== id);
+    }
+    this.saveJsonDB(db);
+  }
+
+  // --- Edit & Delete Courts ---
+  public async updateCourt(id: string, name: string, sportId: string, basePrice: number): Promise<void> {
+    if (this.isSqlEnabled && this.pool) {
+      await this.pool.request()
+        .input("id", sql.VarChar(50), id)
+        .input("name", sql.NVarChar(100), name)
+        .input("sportId", sql.VarChar(50), sportId)
+        .input("basePrice", sql.Decimal(10, 2), basePrice)
+        .query(`
+          UPDATE san_con 
+          SET ten_san = @name, bo_mon_id = @sportId, gia_co_ban = @basePrice 
+          WHERE id = @id
+        `);
+      return;
+    }
+
+    const db = this.loadJsonDB();
+    const idx = db.courts.findIndex((c: any) => c.id === id);
+    if (idx !== -1) {
+      db.courts[idx] = {
+        ...db.courts[idx],
+        name,
+        sportId,
+        basePrice
+      };
+      this.saveJsonDB(db);
+    }
+  }
+
+  public async deleteCourt(id: string): Promise<void> {
+    if (this.isSqlEnabled && this.pool) {
+      await this.pool.request()
+        .input("id", sql.VarChar(50), id)
+        .query("DELETE FROM san_con WHERE id = @id");
+      return;
+    }
+
+    const db = this.loadJsonDB();
+    db.courts = db.courts.filter((c: any) => c.id !== id);
+    this.saveJsonDB(db);
   }
 }
 

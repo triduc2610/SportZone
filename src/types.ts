@@ -52,6 +52,8 @@ export interface CourtCluster {
   description: string;
   status: ClusterStatus;
   createdAt: string;
+  avgRating?: number;
+  reviewCount?: number;
 }
 
 export interface Court {
@@ -94,4 +96,15 @@ export interface DayRevenueStat {
   date: string;
   revenue: number;
   bookingCount: number;
+}
+
+export interface Review {
+  id: string;
+  userId: string;
+  username: string;
+  userFullName: string;
+  clusterId: string;
+  rating: number; // 1-5
+  comment: string;
+  createdAt: string;
 }

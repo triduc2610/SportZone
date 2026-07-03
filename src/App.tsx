@@ -231,6 +231,16 @@ export default function App() {
         {currentUser?.role === UserRole.ADMIN && (
           <>
             <button
+              onClick={() => setActivePortal('owner_clusters')}
+              className={`py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activePortal === 'owner_clusters'
+                  ? 'bg-[#10B981]/10 text-[#064E3B] border border-[#10B981]/20 font-extrabold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              🏢 Quản lý & Sửa Sân
+            </button>
+            <button
               onClick={() => setActivePortal('admin_users')}
               className={`py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activePortal === 'admin_users'
@@ -286,7 +296,7 @@ export default function App() {
           />
         )}
         
-        {activePortal.startsWith('owner') && currentUser?.role === UserRole.OWNER && (
+        {activePortal.startsWith('owner') && (currentUser?.role === UserRole.OWNER || currentUser?.role === UserRole.ADMIN) && (
           <OwnerModule 
             user={currentUser} 
             activeTab={

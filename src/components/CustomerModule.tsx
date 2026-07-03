@@ -42,6 +42,12 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
   // Booking History State
   const [bookingHistory, setBookingHistory] = useState<any[]>([]);
 
+  // Reviews States
+  const [ratingBookingId, setRatingBookingId] = useState<string | null>(null);
+  const [ratingValue, setRatingValue] = useState<number>(5);
+  const [ratingComment, setRatingComment] = useState<string>('');
+  const [reviewedBookings, setReviewedBookings] = useState<string[]>([]);
+
   // Gemini State
   const [aiInput, setAiInput] = useState('');
   const [aiChat, setAiChat] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([
@@ -198,6 +204,46 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
       }
     } catch (err) {
       alert('Có lỗi xảy ra khi hủy lịch.');
+    }
+  };
+
+  const handleSubmitReview = async (booking: any) => {
+    if (!user) return;
+    if (!ratingComment.trim()) {
+      alert("Vui lòng nhập lời nhận xét của bạn!");
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          clusterId: booking.clusterId,
+          rating: ratingValue,
+          comment: ratingComment
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert("Đã gửi đánh giá & bình luận thành công! Cảm ơn bạn.");
+        setReviewedBookings(prev => [...prev, booking.id]);
+        setRatingBookingId(null);
+        setRatingComment('');
+        fetchBookingHistory();
+        if (selectedCluster && selectedCluster.id === booking.clusterId) {
+          fetch(`/api/clusters/${selectedCluster.id}`)
+            .then(r => r.json())
+            .then(setSelectedCluster);
+        }
+        fetchClusters();
+      } else {
+        alert(data.error || "Gửi đánh giá thất bại.");
+      }
+    } catch {
+      alert("Đã xảy ra lỗi khi gửi đánh giá.");
     }
   };
 
@@ -389,7 +435,13 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
 
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-2">
-                      <h3 className="text-sm font-display font-bold text-slate-800 group-hover:text-[#10B981] transition-colors line-clamp-1">{cluster.name}</h3>
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-display font-bold text-slate-800 group-hover:text-[#10B981] transition-colors line-clamp-1">{cluster.name}</h3>
+                        <div className="flex items-center gap-0.5 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 shrink-0">
+                          <span className="text-amber-500 text-[10px]">★</span>
+                          <span className="text-[10px] text-slate-700 font-extrabold">{cluster.avgRating ? cluster.avgRating : '5.0'}</span>
+                        </div>
+                      </div>
                       <p className="text-slate-500 text-xs line-clamp-2 leading-relaxed">{cluster.description}</p>
                     </div>
 
@@ -458,9 +510,16 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                   <div className="absolute bottom-6 left-6 right-6">
-                    <span className="bg-[#10B981]/20 backdrop-blur-md text-[#10B981] border border-[#10B981]/30 text-[10px] px-2.5 py-0.5 rounded-md font-bold mb-2 inline-block shadow-xs">
-                      {selectedCluster.districtName}
-                    </span>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="bg-[#10B981]/20 backdrop-blur-md text-[#10B981] border border-[#10B981]/30 text-[10px] px-2.5 py-0.5 rounded-md font-bold shadow-xs">
+                        {selectedCluster.districtName}
+                      </span>
+                      <div className="flex items-center gap-1 bg-amber-500/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                        <span>★</span>
+                        <span>{selectedCluster.avgRating ? selectedCluster.avgRating : '5.0'}</span>
+                        <span className="opacity-75 font-normal">({selectedCluster.reviewCount || 0} đánh giá)</span>
+                      </div>
+                    </div>
                     <h1 className="text-lg md:text-xl font-display font-extrabold text-white leading-tight">{selectedCluster.name}</h1>
                     <p className="text-slate-200 text-xs mt-1 flex items-center gap-1.5">
                       <MapPin size={12} className="text-[#10B981]" />
@@ -495,6 +554,49 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Reviews & Comments Feed */}
+                  <div className="border-t border-slate-100 pt-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Đánh giá & Bình luận ({selectedCluster.reviews?.length || 0})</h4>
+                      {selectedCluster.avgRating > 0 && (
+                        <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+                          <span className="text-amber-500 text-xs">★</span>
+                          <span className="text-xs text-slate-700 font-extrabold">{selectedCluster.avgRating} / 5.0</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedCluster.reviews && selectedCluster.reviews.length > 0 ? (
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                        {selectedCluster.reviews.map((rev: any) => (
+                          <div key={rev.id} className="p-3.5 bg-slate-50 border border-slate-200/60 rounded-xl space-y-1.5 hover:bg-slate-100/40 transition-colors">
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-800">{rev.userFullName}</span>
+                                <span className="text-[10px] text-slate-400 font-medium">@{rev.username}</span>
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <span key={i} className={`text-xs ${i < rev.rating ? 'text-amber-500' : 'text-slate-200'}`}>★</span>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-600 font-medium leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
+                              "{rev.comment}"
+                            </p>
+                            <span className="text-[9px] text-slate-400 block font-sans text-right">
+                              {new Date(rev.createdAt).toLocaleString('vi-VN')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p className="text-xs text-slate-400 italic">Chưa có đánh giá nào cho cụm sân này. Hoàn thành lịch đặt và để lại đánh giá đầu tiên của bạn!</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -684,53 +786,138 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
                 }[booking.status as BookingStatus];
 
                 return (
-                  <div 
-                    key={booking.id}
-                    className="p-5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold py-0.5 px-2.5 rounded-full border ${statusBadge}`}>
-                          {displayStatus}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-semibold">Mã: {booking.id}</span>
+                  <div key={booking.id} className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden shadow-xs space-y-0">
+                    <div 
+                      className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold py-0.5 px-2.5 rounded-full border ${statusBadge}`}>
+                            {displayStatus}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">Mã: {booking.id}</span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-display font-bold text-slate-800">{booking.clusterName} - {booking.courtName}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                            <MapPin size={12} className="text-slate-400" />
+                            {booking.address}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-4 text-xs text-slate-600 font-medium">
+                          <div className="flex items-center gap-1">
+                            <Calendar size={12} className="text-[#10B981]" />
+                            <span>Ngày chơi: <strong>{booking.bookingDate}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock size={12} className="text-[#10B981]" />
+                            <span>Giờ: <strong>{booking.startHour}:00 - {booking.endHour}:00</strong></span>
+                          </div>
+                        </div>
                       </div>
 
-                      <div>
-                        <h4 className="text-sm font-display font-bold text-slate-800">{booking.clusterName} - {booking.courtName}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                          <MapPin size={12} className="text-slate-400" />
-                          {booking.address}
-                        </p>
-                      </div>
+                      <div className="flex items-center gap-4 border-t md:border-t-0 border-slate-200 pt-4 md:pt-0 justify-between md:justify-end shrink-0">
+                        <div className="md:text-right">
+                          <span className="text-[10px] text-slate-400 block">Tổng tiền</span>
+                          <span className="text-sm font-display font-extrabold text-[#10B981]">{formatVND(booking.totalPrice)}</span>
+                        </div>
 
-                      <div className="flex flex-wrap gap-4 text-xs text-slate-600 font-medium">
-                        <div className="flex items-center gap-1">
-                          <Calendar size={12} className="text-[#10B981]" />
-                          <span>Ngày chơi: <strong>{booking.bookingDate}</strong></span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock size={12} className="text-[#10B981]" />
-                          <span>Giờ: <strong>{booking.startHour}:00 - {booking.endHour}:00</strong></span>
-                        </div>
+                        {(booking.status === 'pending_payment' || booking.status === 'paid') && (
+                          <button
+                            onClick={() => handleCancelBooking(booking.id)}
+                            className="py-1.5 px-3 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                          >
+                            Hủy đặt sân
+                          </button>
+                        )}
+
+                        {booking.status === 'checked_in' && (
+                          reviewedBookings.includes(booking.id) ? (
+                            <span className="py-1.5 px-3 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-lg text-xs font-bold">
+                              Đã đánh giá ✓
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (ratingBookingId === booking.id) {
+                                  setRatingBookingId(null);
+                                } else {
+                                  setRatingBookingId(booking.id);
+                                  setRatingValue(5);
+                                  setRatingComment('');
+                                }
+                              }}
+                              className={`py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                                ratingBookingId === booking.id
+                                  ? 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                                  : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs'
+                              }`}
+                            >
+                              {ratingBookingId === booking.id ? 'Hủy' : 'Đánh giá sân'}
+                            </button>
+                          )
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-6 border-t md:border-t-0 border-slate-200 pt-4 md:pt-0 justify-between md:justify-end">
-                      <div className="md:text-right">
-                        <span className="text-[10px] text-slate-400 block">Tổng tiền</span>
-                        <span className="text-sm font-display font-extrabold text-[#10B981]">{formatVND(booking.totalPrice)}</span>
-                      </div>
+                    {/* Inline rating form */}
+                    {ratingBookingId === booking.id && (
+                      <div className="border-t border-slate-200 p-5 bg-white space-y-4">
+                        <div className="space-y-1">
+                          <h5 className="text-xs font-bold text-slate-700">Đánh giá cụm sân này</h5>
+                          <p className="text-[11px] text-slate-400">Chia sẻ trải nghiệm chơi thực tế của bạn tại {booking.clusterName}</p>
+                        </div>
 
-                      {(booking.status === 'pending_payment' || booking.status === 'paid') && (
-                        <button
-                          onClick={() => handleCancelBooking(booking.id)}
-                          className="py-1.5 px-3 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-bold cursor-pointer transition-colors"
-                        >
-                          Hủy đặt sân
-                        </button>
-                      )}
-                    </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-semibold text-slate-600">Điểm số:</span>
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map((stars) => (
+                              <button
+                                key={stars}
+                                type="button"
+                                onClick={() => setRatingValue(stars)}
+                                className="text-xl cursor-pointer hover:scale-110 transition-transform"
+                              >
+                                <span className={stars <= ratingValue ? 'text-amber-500' : 'text-slate-200'}>★</span>
+                              </button>
+                            ))}
+                          </div>
+                          <span className="text-xs text-slate-500 font-bold">
+                            ({ratingValue === 1 ? 'Tệ' : ratingValue === 2 ? 'Kém' : ratingValue === 3 ? 'Bình thường' : ratingValue === 4 ? 'Tốt' : 'Tuyệt vời!'})
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600 block">Nội dung bình luận:</label>
+                          <textarea
+                            rows={3}
+                            value={ratingComment}
+                            onChange={(e) => setRatingComment(e.target.value)}
+                            placeholder="Sân sạch sẽ, nhân viên đón tiếp nhiệt tình, hệ thống chiếu sáng tốt..."
+                            className="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-[#10B981] resize-none"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRatingBookingId(null)}
+                            className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition-colors"
+                          >
+                            Hủy bỏ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSubmitReview(booking)}
+                            className="py-1.5 px-4 bg-[#10B981] hover:bg-[#0D9488] text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-xs"
+                          >
+                            Gửi đánh giá
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })

@@ -160,6 +160,8 @@ async function startServer() {
         );
       }
 
+      const reviewsAll = await db.getReviews();
+
       // Attach district name and list of sports inside the cluster for rendering
       const results = filtered.map((c: any) => {
         const dist = districts.find((d: any) => d.id === c.districtId);
@@ -176,13 +178,19 @@ async function startServer() {
           finalImageUrl = getDefaultSportImage(c.name, c.description, mainSportId);
         }
 
+        const clusterReviews = reviewsAll.filter((r: any) => r.clusterId === c.id);
+        const totalRating = clusterReviews.reduce((sum: number, r: any) => sum + r.rating, 0);
+        const avgRating = clusterReviews.length > 0 ? Number((totalRating / clusterReviews.length).toFixed(1)) : 0;
+
         return {
           ...c,
           imageUrl: finalImageUrl,
           districtName: dist ? dist.name : "Hà Nội",
           sports: clusterSports,
           courtCount: clusterCourts.length,
-          minPrice: clusterCourts.length > 0 ? Math.min(...clusterCourts.map((crt: any) => crt.basePrice)) : 0
+          minPrice: clusterCourts.length > 0 ? Math.min(...clusterCourts.map((crt: any) => crt.basePrice)) : 0,
+          avgRating,
+          reviewCount: clusterReviews.length
         };
       });
 
@@ -199,6 +207,7 @@ async function startServer() {
       const courts = await db.getCourts();
       const sports = await db.getSports();
       const pricingRulesAll = await db.getPricingRules();
+      const reviewsAll = await db.getReviews();
 
       const cluster = court_clusters.find((c: any) => c.id === req.params.id);
       if (!cluster) {
@@ -224,12 +233,19 @@ async function startServer() {
         finalImageUrl = getDefaultSportImage(cluster.name, cluster.description, mainSportId);
       }
 
+      const clusterReviews = reviewsAll.filter((r: any) => r.clusterId === cluster.id);
+      const totalRating = clusterReviews.reduce((sum: number, r: any) => sum + r.rating, 0);
+      const avgRating = clusterReviews.length > 0 ? Number((totalRating / clusterReviews.length).toFixed(1)) : 0;
+
       res.json({
         ...cluster,
         imageUrl: finalImageUrl,
         districtName: dist ? dist.name : "Hà Nội",
         courts: clusterCourts,
-        pricingRules
+        pricingRules,
+        avgRating,
+        reviewCount: clusterReviews.length,
+        reviews: clusterReviews
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -282,6 +298,109 @@ async function startServer() {
 
       await db.addCourt(newCourt);
       res.status(201).json(newCourt);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Reviews API ---
+  app.get("/api/reviews", async (req, res) => {
+    try {
+      const clusterId = req.query.clusterId as string;
+      const reviews = await db.getReviews(clusterId);
+      res.json(reviews);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/reviews", async (req, res) => {
+    const { userId, clusterId, rating, comment } = req.body;
+    if (!userId || !clusterId || !rating) {
+      return res.status(400).json({ error: "Thông tin đánh giá không đầy đủ!" });
+    }
+
+    try {
+      // Validate that the user has a completed booking ("checked_in" status) for any court in this cluster
+      const bookings = await db.getBookings();
+      const courts = await db.getCourts();
+      
+      const userBookings = bookings.filter((b: any) => b.customerId === userId && b.status === "checked_in");
+      const clusterCourts = courts.filter((c: any) => c.clusterId === clusterId);
+      const clusterCourtIds = clusterCourts.map((c: any) => c.id);
+
+      const hasCompletedBooking = userBookings.some((b: any) => clusterCourtIds.includes(b.courtId));
+
+      if (!hasCompletedBooking) {
+        return res.status(403).json({ error: "Bạn chỉ có thể đánh giá các sân thể thao mà bạn đã từng đặt và hoàn thành chơi (check-in)!" });
+      }
+
+      const users = await db.getUsers();
+      const user = users.find((u: any) => u.id === userId);
+      const username = user ? user.username : "khachhang";
+      const userFullName = user ? user.fullName : "Khách hàng SportZone";
+
+      const newReview = {
+        id: "rev-" + Date.now(),
+        userId,
+        username,
+        userFullName,
+        clusterId,
+        rating: Number(rating),
+        comment: comment || "",
+        createdAt: new Date().toISOString()
+      };
+
+      const created = await db.addReview(newReview);
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Edit & Delete Clusters API ---
+  app.put("/api/clusters/:id", async (req, res) => {
+    const { name, districtId, address, description, imageUrl } = req.body;
+    if (!name || !districtId || !address || !description) {
+      return res.status(400).json({ error: "Thông tin cụm sân không đầy đủ!" });
+    }
+
+    try {
+      await db.updateCluster(req.params.id, name, districtId, address, description, imageUrl || "");
+      res.json({ message: "Cập nhật cụm sân thành công!" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/clusters/:id", async (req, res) => {
+    try {
+      await db.deleteCluster(req.params.id);
+      res.json({ message: "Xóa cụm sân thành công!" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Edit & Delete Courts API ---
+  app.put("/api/courts/:id", async (req, res) => {
+    const { name, sportId, basePrice } = req.body;
+    if (!name || !sportId || !basePrice) {
+      return res.status(400).json({ error: "Thông tin sân con không đầy đủ!" });
+    }
+
+    try {
+      await db.updateCourt(req.params.id, name, sportId, Number(basePrice));
+      res.json({ message: "Cập nhật sân con thành công!" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/courts/:id", async (req, res) => {
+    try {
+      await db.deleteCourt(req.params.id);
+      res.json({ message: "Xóa sân con thành công!" });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -478,6 +597,7 @@ async function startServer() {
           ...b,
           courtName: court ? court.name : "Sân đã xóa",
           clusterName: cluster ? cluster.name : "Cụm sân đã xóa",
+          clusterId: cluster ? cluster.id : "",
           address: cluster ? cluster.address : "",
           sportName: sport ? sport.name : "",
           districtId: cluster ? cluster.districtId : ""
