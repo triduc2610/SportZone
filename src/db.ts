@@ -178,6 +178,9 @@ class Database {
 
   // Connect to SQL Server & Sync tables if enabled
   public async initialize() {
+    // Read DB_ENABLED here to ensure environment variables from dotenv are fully loaded
+    this.isSqlEnabled = process.env.DB_ENABLED === "true";
+
     if (!this.isSqlEnabled) {
       console.log("Database fallback mode: Using JSON Store (db_store.json)");
       this.loadJsonDB(); // Ensure exists
@@ -185,12 +188,24 @@ class Database {
     }
 
     try {
+      let dbUser = process.env.DB_USER || "sa";
+      let domain: string | undefined = undefined;
+
+      // Automatically handle Windows Authentication Domain User format (e.g., DOMAIN\username)
+      if (dbUser.includes("\\")) {
+        const parts = dbUser.split("\\");
+        domain = parts[0];
+        dbUser = parts[1];
+        console.log(`Parsed Windows Auth credentials: Domain = "${domain}", User = "${dbUser}"`);
+      }
+
       const sqlConfig: sql.config = {
-        user: process.env.DB_USER || "sa",
+        user: dbUser,
         password: process.env.DB_PASSWORD || "", // empty password specified
         server: process.env.DB_SERVER || "localhost",
         database: process.env.DB_NAME || "sportzone_db",
         port: parseInt(process.env.DB_PORT || "1433"),
+        domain: domain,
         options: {
           encrypt: false,
           trustServerCertificate: true,
