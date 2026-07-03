@@ -12,6 +12,7 @@ import {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [activePortal, setActivePortal] = useState<string>('customer_search');
   const [adminPendingCount, setAdminPendingCount] = useState<number>(0);
 
@@ -65,9 +66,14 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    setIsLogoutConfirmOpen(true);
+  };
+
+  const confirmLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('user');
     setActivePortal('customer_search');
+    setIsLogoutConfirmOpen(false);
   };
 
   return (
@@ -82,8 +88,11 @@ export default function App() {
           <div>
             <h1 className="text-base font-display font-extrabold text-[#064E3B] tracking-tight flex items-center gap-1.5">
               SportZone Hà Nội
+              <span className="text-[9px] font-bold py-0.5 px-1.5 rounded-md bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 uppercase">
+                BTL PM
+              </span>
             </h1>
-            <p className="text-[10px] text-slate-500 tracking-wide font-sans">Đặt sân trực tuyến tại Thủ đô</p>
+            <p className="text-[10px] text-slate-500 tracking-wide font-sans">Đặt sân trực tuyến thời gian thực tại Thủ đô</p>
           </div>
         </div>
 
@@ -317,8 +326,10 @@ export default function App() {
       {/* Beautiful humble page footer */}
       <footer className="border-t border-[#E2E8F0] bg-white px-6 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <p>© 2026 SportZone Hà Nội.</p>
+          <p>© 2026 SportZone Hà Nội. Bài tập lớn xuất sắc môn Quản lý dự án CNTT.</p>
           <div className="flex gap-4 font-mono text-[10px] text-slate-400">
+            <span>DB ENGINE: JSON-Relational MOCK (3NF standard)</span>
+            <span>API PORT: 3000</span>
           </div>
         </div>
       </footer>
@@ -329,6 +340,46 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)} 
         onAuthSuccess={handleAuthSuccess}
       />
+
+      {/* Logout Confirmation Modal */}
+      {isLogoutConfirmOpen && (
+        <div id="logout-confirm-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop blur */}
+          <div 
+            className="absolute inset-0 bg-[#0F172A]/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsLogoutConfirmOpen(false)}
+          ></div>
+          
+          {/* Modal Container */}
+          <div className="relative bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-100 transform transition-all flex flex-col items-center text-center">
+            {/* Warning Icon Container */}
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+              <LogOut size={24} className="ml-1" />
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Đăng xuất tài khoản</h3>
+            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+              Bạn có chắc chắn muốn đăng xuất khỏi hệ thống **SportZone Hà Nội** không? Các phiên làm việc hiện tại của bạn sẽ kết thúc.
+            </p>
+
+            {/* Actions Buttons */}
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={() => setIsLogoutConfirmOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors text-xs font-bold cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors text-xs font-bold cursor-pointer shadow-xs"
+              >
+                Xác nhận thoát
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
