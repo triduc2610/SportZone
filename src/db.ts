@@ -215,6 +215,94 @@ class Database {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
   }
 
+  // Parses ADO.NET or URI-style SQL Server connection strings into sql.config objects
+  private parseConnectionString(connStr: string): sql.config {
+    const trimmedConn = connStr.trim();
+    
+    // 1. If it is a URI-style connection string (mssql:// or sqlserver://)
+    if (trimmedConn.startsWith("mssql://") || trimmedConn.startsWith("sqlserver://")) {
+      try {
+        const urlStr = trimmedConn.replace(/^sqlserver:/, "http:").replace(/^mssql:/, "http:");
+        const url = new URL(urlStr);
+        const user = decodeURIComponent(url.username);
+        const password = decodeURIComponent(url.password);
+        const server = url.hostname;
+        const port = url.port ? parseInt(url.port) : 1433;
+        const database = url.pathname.replace(/^\//, "");
+        const encrypt = url.searchParams.get("encrypt") === "true";
+        
+        return {
+          user,
+          password,
+          server,
+          port,
+          database,
+          options: {
+            encrypt,
+            trustServerCertificate: true,
+            connectTimeout: 30000
+          }
+        };
+      } catch (e: any) {
+        console.warn("Failed parsing URI-style connection string, falling back to basic configuration: ", e.message);
+      }
+    }
+
+    // 2. If it is a Key-Value pair (ADO.NET) connection string (e.g., Server=tcp:...;Database=...)
+    const config: any = {
+      options: {
+        encrypt: true, // Default to true for cloud
+        trustServerCertificate: true,
+        connectTimeout: 30000
+      }
+    };
+
+    const pairs = trimmedConn.split(";");
+    for (const pair of pairs) {
+      const trimmed = pair.trim();
+      if (!trimmed) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx === -1) continue;
+      const key = trimmed.substring(0, eqIdx).trim().toLowerCase();
+      const value = trimmed.substring(eqIdx + 1).trim();
+
+      if (key === "server" || key === "data source" || key === "address" || key === "addr") {
+        // Server key may contain port (e.g. Server=tcp:host,port or Server=host,port)
+        const hostPart = value.replace(/^tcp:/i, "").trim();
+        if (hostPart.includes(",")) {
+          const parts = hostPart.split(",");
+          config.server = parts[0].trim();
+          config.port = parseInt(parts[1].trim());
+        } else if (hostPart.includes(":")) {
+          const parts = hostPart.split(":");
+          config.server = parts[0].trim();
+          config.port = parseInt(parts[1].trim());
+        } else {
+          config.server = hostPart;
+        }
+      } else if (key === "database" || key === "initial catalog") {
+        config.database = value;
+      } else if (key === "user id" || key === "user" || key === "uid") {
+        config.user = value;
+      } else if (key === "password" || key === "pwd") {
+        config.password = value;
+      } else if (key === "port") {
+        config.port = parseInt(value);
+      } else if (key === "encrypt") {
+        config.options.encrypt = value.toLowerCase() === "true" || value === "1";
+      } else if (key === "trustservercertificate") {
+        config.options.trustServerCertificate = value.toLowerCase() === "true" || value === "1";
+      }
+    }
+
+    // Assign default fallback port if missing
+    if (!config.port) {
+      config.port = 1433;
+    }
+
+    return config;
+  }
+
   // Connect to SQL Server & Sync tables if enabled
   public async initialize() {
     // Read DB_ENABLED here to ensure environment variables from dotenv are fully loaded
@@ -243,9 +331,16 @@ class Database {
                           (process.env.DB_SERVER || "localhost") === "127.0.0.1";
       const shouldEncrypt = process.env.DB_ENCRYPT ? process.env.DB_ENCRYPT === "true" : !isLocalhost;
 
-      if (connectionString) {
-        console.log("Connecting to SQL Server using Connection String...");
-        this.pool = await sql.connect(connectionString);
+      if (connectionString && connectionString.trim() !== "") {
+        console.log("Connecting to SQL Server using parsed Connection String...");
+        const parsedConfig = this.parseConnectionString(connectionString);
+        
+        if (!parsedConfig.server) {
+          throw new Error("Không thể tìm thấy thuộc tính 'Server' hay 'Data Source' trong Connection String. Vui lòng kiểm tra lại cấu hình.");
+        }
+
+        console.log(`Connection configuration parsed successfully! Server: ${parsedConfig.server}:${parsedConfig.port}, Database: ${parsedConfig.database || "default"}`);
+        this.pool = await sql.connect(parsedConfig);
       } else {
         const sqlConfig: sql.config = {
           user: dbUser,
@@ -257,7 +352,7 @@ class Database {
           options: {
             encrypt: shouldEncrypt,
             trustServerCertificate: true,
-            connectTimeout: 15000 // Increased timeout for cloud database connections
+            connectTimeout: 30000 // Increased timeout for cloud database connections
           }
         };
 
