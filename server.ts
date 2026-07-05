@@ -44,38 +44,54 @@ async function startServer() {
   app.use(express.json());
 
   // Configure secure CORS (Cross-Origin Resource Sharing)
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
-    : [];
+  app.use(cors((req: any, callback: any) => {
+    const origin = req.header('Origin');
+    const host = req.header('Host') || req.header('host');
+    
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+      : [];
 
-  app.use(cors({
-    origin: (origin, callback) => {
-      // In development or if no origin (like mobile apps, curl, or same-origin), allow it
-      if (!origin || process.env.NODE_ENV !== "production") {
-        return callback(null, true);
-      }
-      
-      // Check if the request origin is in the allowed list
-      const isAllowed = allowedOrigins.some(allowedOpt => {
-        if (allowedOpt.includes("*")) {
-          // Simple wildcard matching, e.g., *.vercel.app or *.netlify.app
-          const regex = new RegExp("^" + allowedOpt.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
-          return regex.test(origin);
-        }
-        return allowedOpt === origin;
-      });
+    let isAllowed = false;
 
-      if (isAllowed) {
-        callback(null, true);
+    // 1. In development or if there is no origin (e.g. self-fetch, curl), allow it
+    if (!origin || process.env.NODE_ENV !== "production") {
+      isAllowed = true;
+    } else {
+      // 2. Check same-origin dynamically in production (frontend and backend on the same host)
+      const isSameOrigin = host && (
+        origin === `http://${host}` || 
+        origin === `https://${host}` ||
+        origin.replace(/^https?:\/\//, '') === host
+      );
+
+      if (isSameOrigin) {
+        isAllowed = true;
       } else {
-        console.warn(`CORS blocked request from origin: ${origin}`);
-        callback(new Error("Không được phép truy cập theo chính sách CORS của SportZone!"));
+        // 3. Check if origin is in ALLOWED_ORIGINS
+        isAllowed = allowedOrigins.some(allowedOpt => {
+          if (!allowedOpt) return false;
+          if (allowedOpt.includes("*")) {
+            const regex = new RegExp("^" + allowedOpt.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+            return regex.test(origin);
+          }
+          return allowedOpt === origin;
+        });
       }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    credentials: true,
-    maxAge: 86400 // Cache preflight response for 24 hours
+    }
+
+    if (isAllowed) {
+      callback(null, {
+        origin: true,
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+        credentials: true,
+        maxAge: 86400 // Cache preflight response for 24 hours
+      });
+    } else {
+      console.warn(`CORS blocked request from origin: ${origin} (Host: ${host})`);
+      callback(new Error("Không được phép truy cập theo chính sách CORS của SportZone!"));
+    }
   }));
 
   // Initialize DB driver (Connects to SQL Server if DB_ENABLED=true, otherwise Fallbacks to JSON store)

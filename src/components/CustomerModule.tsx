@@ -65,8 +65,20 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
 
   // Load Initial Data
   useEffect(() => {
-    fetch('/api/districts').then(res => res.json()).then(setDistricts);
-    fetch('/api/sports').then(res => res.json()).then(setSports);
+    fetch('/api/districts')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setDistricts(data);
+      })
+      .catch(err => console.error("Error fetching districts:", err));
+
+    fetch('/api/sports')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setSports(data);
+      })
+      .catch(err => console.error("Error fetching sports:", err));
+
     fetchClusters();
   }, [selectedDistrict, selectedSport]);
 
@@ -75,7 +87,7 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
       fetchBookingHistory();
       // Fetch user's reviews to identify reviewed bookings
       fetch('/api/reviews')
-        .then(res => res.json())
+        .then(res => res.ok ? res.json() : [])
         .then(reviews => {
           if (Array.isArray(reviews)) {
             const userReviewedBookingIds = reviews
@@ -95,15 +107,21 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
     if (searchQuery) url += `search=${encodeURIComponent(searchQuery)}&`;
     
     fetch(url)
-      .then(res => res.json())
-      .then(setClusters);
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setClusters(data);
+      })
+      .catch(err => console.error("Error fetching clusters:", err));
   };
 
   const fetchBookingHistory = () => {
     if (!user) return;
     fetch(`/api/bookings/customer/${user.id}`)
-      .then(res => res.json())
-      .then(setBookingHistory);
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setBookingHistory(data);
+      })
+      .catch(err => console.error("Error fetching booking history:", err));
   };
 
   // Process sorting and pagination of clusters

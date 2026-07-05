@@ -25,20 +25,29 @@ export default function AdminModule({ user, activeTab, setActiveTab }: AdminModu
 
   const fetchPendingClusters = () => {
     fetch('/api/admin/clusters')
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : [])
       .then(data => {
-        // Filter only pending
-        const pending = data.filter((c: any) => c.status === 'pending');
-        setPendingClusters(pending);
-      });
+        if (Array.isArray(data)) {
+          // Filter only pending
+          const pending = data.filter((c: any) => c.status === 'pending');
+          setPendingClusters(pending);
+        }
+      })
+      .catch(err => console.error("Error fetching pending clusters:", err));
   };
 
   const fetchAdminStats = () => {
     setLoading(true);
     fetch('/api/admin/stats')
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : null)
       .then(data => {
-        setAdminStats(data);
+        if (data && !data.error) {
+          setAdminStats(data);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching admin stats:", err);
         setLoading(false);
       });
   };

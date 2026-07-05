@@ -59,8 +59,20 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
   const [editCourtBasePrice, setEditCourtBasePrice] = useState('');
 
   useEffect(() => {
-    fetch('/api/districts').then(res => res.json()).then(setDistricts);
-    fetch('/api/sports').then(res => res.json()).then(setSports);
+    fetch('/api/districts')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setDistricts(data);
+      })
+      .catch(err => console.error("Error fetching districts:", err));
+
+    fetch('/api/sports')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setSports(data);
+      })
+      .catch(err => console.error("Error fetching sports:", err));
+
     fetchMyClusters();
     fetchIncomingBookings();
     fetchStats();
@@ -70,34 +82,46 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
     // We can fetch approved & pending clusters by filtering inside our client
     // By matching ownerId
     fetch('/api/admin/clusters')
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : [])
       .then(allClusters => {
-        const mine = user.role === 'admin' ? allClusters : allClusters.filter((c: any) => c.ownerId === user.id);
-        setMyClusters(mine);
-        if (mine.length > 0 && !selectedCluster) {
-          handleSelectCluster(mine[0].id);
+        if (Array.isArray(allClusters)) {
+          const mine = user.role === 'admin' ? allClusters : allClusters.filter((c: any) => c.ownerId === user.id);
+          setMyClusters(mine);
+          if (mine.length > 0 && !selectedCluster) {
+            handleSelectCluster(mine[0].id);
+          }
         }
-      });
+      })
+      .catch(err => console.error("Error fetching clusters:", err));
   };
 
   const handleSelectCluster = (clusterId: string) => {
     fetch(`/api/clusters/${clusterId}`)
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : null)
       .then(data => {
-        setSelectedCluster(data);
-      });
+        if (data && !data.error) {
+          setSelectedCluster(data);
+        }
+      })
+      .catch(err => console.error("Error fetching cluster details:", err));
   };
 
   const fetchIncomingBookings = () => {
     fetch(`/api/bookings/owner/${user.id}`)
-      .then(res => res.json())
-      .then(setIncomingBookings);
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setIncomingBookings(data);
+      })
+      .catch(err => console.error("Error fetching bookings:", err));
   };
 
   const fetchStats = () => {
     fetch(`/api/owner/stats/${user.id}`)
-      .then(res => res.json())
-      .then(setStats);
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && !data.error) setStats(data);
+      })
+      .catch(err => console.error("Error fetching stats:", err));
   };
 
   const handleCreateCluster = async (e: React.FormEvent) => {

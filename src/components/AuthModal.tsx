@@ -37,7 +37,14 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(`Lỗi máy chủ (Status: ${res.status}): ${text.slice(0, 120) || 'Không có phản hồi chi tiết.'}`);
+      }
+
       if (!res.ok) {
         throw new Error(data.error || 'Có lỗi xảy ra!');
       }
