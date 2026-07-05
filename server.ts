@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
@@ -32,6 +33,41 @@ function getHanoiTime() {
 async function startServer() {
   const app = express();
   app.use(express.json());
+
+  // Configure secure CORS (Cross-Origin Resource Sharing)
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+    : [];
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      // In development or if no origin (like mobile apps, curl, or same-origin), allow it
+      if (!origin || process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
+      
+      // Check if the request origin is in the allowed list
+      const isAllowed = allowedOrigins.some(allowedOpt => {
+        if (allowedOpt.includes("*")) {
+          // Simple wildcard matching, e.g., *.vercel.app or *.netlify.app
+          const regex = new RegExp("^" + allowedOpt.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+          return regex.test(origin);
+        }
+        return allowedOpt === origin;
+      });
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS blocked request from origin: ${origin}`);
+        callback(new Error("Không được phép truy cập theo chính sách CORS của SportZone!"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    credentials: true,
+    maxAge: 86400 // Cache preflight response for 24 hours
+  }));
 
   // Initialize DB driver (Connects to SQL Server if DB_ENABLED=true, otherwise Fallbacks to JSON store)
   await db.initialize();
