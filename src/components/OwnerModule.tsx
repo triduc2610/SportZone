@@ -148,11 +148,15 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
       if (res.ok) {
         alert('Gửi cụm sân thành công! Vui lòng chờ quản trị viên hệ thống phê duyệt hồ sơ.');
         setClusterName('');
+        setClusterDistrictId('');
         setClusterAddress('');
         setClusterDesc('');
         setClusterImage('');
         setShowClusterForm(false);
         fetchMyClusters();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Có lỗi xảy ra khi tạo cụm sân.');
       }
     } catch {
       alert('Có lỗi xảy ra khi tạo cụm sân.');
@@ -185,6 +189,9 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
         setShowCourtForm(false);
         handleSelectCluster(selectedCluster.id);
         fetchStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Có lỗi xảy ra khi thêm sân con.');
       }
     } catch {
       alert('Có lỗi xảy ra khi thêm sân con.');
@@ -336,6 +343,9 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
         alert('Cấu hình khung giờ tăng giá thành công!');
         setShowRuleForm(false);
         handleSelectCluster(selectedCluster.id);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Có lỗi xảy ra khi cấu hình giờ vàng.');
       }
     } catch {
       alert('Có lỗi xảy ra khi cấu hình giờ vàng.');
