@@ -206,7 +206,8 @@ class PgRequest {
       districtstats: "districtStats",
       sportstats: "sportStats",
       userid: "userId",
-      courtid: "courtId"
+      courtid: "courtId",
+      customerid: "customerId"
     };
 
     const mappedRows = result.rows.map((row: any) => {

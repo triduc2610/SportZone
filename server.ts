@@ -7,6 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { db } from "./src/db";
 import { getDefaultSportImage } from "./src/utils/imageHelper";
+import bcrypt from "bcryptjs";
 
 // Load environment variables
 dotenv.config();
@@ -113,10 +114,11 @@ async function startServer() {
         return res.status(400).json({ error: "Tên đăng nhập đã tồn tại trong hệ thống!" });
       }
 
+      const hashedPassword = bcrypt.hashSync(password, 10);
       const newUser = {
         id: "usr-" + Date.now(),
         username,
-        password, // saved as plaintext/hash depending on DB fallback setup
+        password: hashedPassword,
         fullName,
         phone,
         role,
@@ -145,9 +147,23 @@ async function startServer() {
 
     try {
       const users = await db.getUsers();
-      const user = users.find(
-        (u: any) => u.username.toLowerCase() === username.toLowerCase() && u.password === password
-      );
+      const user = users.find((u: any) => {
+        if (u.username.toLowerCase() !== username.toLowerCase()) {
+          return false;
+        }
+        // Check if the stored password matches plain text or is a bcrypt hash that matches
+        if (u.password === password) {
+          return true;
+        }
+        if (u.password && (u.password.startsWith("$2b$") || u.password.startsWith("$2a$"))) {
+          try {
+            return bcrypt.compareSync(password, u.password);
+          } catch (e) {
+            return false;
+          }
+        }
+        return false;
+      });
 
       if (!user) {
         return res.status(401).json({ error: "Tài khoản hoặc mật khẩu không chính xác!" });
