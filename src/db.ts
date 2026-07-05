@@ -165,13 +165,61 @@ class PgRequest {
       values.push(pValue);
       
       const replaceRegex = new RegExp(`@${pName}\\b`, "g");
-      convertedSql = convertedSql.replace(replaceRegex, `$${values.length}`);
+      const paramIndex = values.length;
+      convertedSql = convertedSql.replace(replaceRegex, () => `$${paramIndex}`);
     }
 
     const result = await this.pool.query(convertedSql, values);
     
+    const camelCaseMap: { [key: string]: string } = {
+      ownerid: "ownerId",
+      districtid: "districtId",
+      imageurl: "imageUrl",
+      createdat: "createdAt",
+      fullname: "fullName",
+      sportid: "sportId",
+      baseprice: "basePrice",
+      clusterid: "clusterId",
+      starthour: "startHour",
+      endhour: "endHour",
+      pricemultiplier: "priceMultiplier",
+      bookingdate: "bookingDate",
+      totalprice: "totalPrice",
+      paymentmethod: "paymentMethod",
+      userfullname: "userFullName",
+      bookingid: "bookingId",
+      iconname: "iconName",
+      bookingcount: "bookingCount",
+      sportname: "sportName",
+      districtname: "districtName",
+      customercount: "customerCount",
+      ownercount: "ownerCount",
+      totalrevenue: "totalRevenue",
+      totalbookings: "totalBookings",
+      courtcount: "courtCount",
+      clustercount: "clusterCount",
+      sportsstats: "sportsStats",
+      dailystats: "dailyStats",
+      userscount: "usersCount",
+      ownerscount: "ownersCount",
+      customerscount: "customersCount",
+      districtstats: "districtStats",
+      sportstats: "sportStats",
+      userid: "userId",
+      courtid: "courtId"
+    };
+
+    const mappedRows = result.rows.map((row: any) => {
+      const newRow: any = {};
+      for (const key of Object.keys(row)) {
+        const camelKey = camelCaseMap[key] || key;
+        newRow[camelKey] = row[key];
+      }
+      return newRow;
+    });
+
     return {
-      recordset: result.rows
+      recordset: mappedRows
     };
   }
 }
