@@ -224,7 +224,10 @@ class Database {
       options: {
         encrypt: true, // Default to true for cloud
         trustServerCertificate: true,
-        connectTimeout: 30000
+        connectTimeout: 30000,
+        cryptoCredentialsDetails: {
+          minVersion: "TLSv1"
+        }
       }
     };
 
@@ -416,7 +419,10 @@ class Database {
           options: {
             encrypt: shouldEncrypt,
             trustServerCertificate: true,
-            connectTimeout: 30000 // Increased timeout for cloud database connections
+            connectTimeout: 30000, // Increased timeout for cloud database connections
+            cryptoCredentialsDetails: {
+              minVersion: "TLSv1"
+            }
           }
         };
 
