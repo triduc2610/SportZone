@@ -11,9 +11,18 @@ import { getDefaultSportImage } from "./src/utils/imageHelper";
 // Load environment variables
 dotenv.config();
 
-// Standard ESM path helpers
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Safe ESM & CJS path resolution helpers
+const resolvedFilename = (() => {
+  try {
+    return fileURLToPath(import.meta.url);
+  } catch (e) {
+    return typeof __filename !== "undefined" ? __filename : "";
+  }
+})();
+
+const resolvedDirname = resolvedFilename 
+  ? path.dirname(resolvedFilename) 
+  : (typeof __dirname !== "undefined" ? __dirname : process.cwd());
 
 const PORT = 3000;
 
