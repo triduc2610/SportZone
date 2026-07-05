@@ -238,22 +238,32 @@ class Database {
         console.log(`Parsed Windows Auth credentials: Domain = "${domain}", User = "${dbUser}"`);
       }
 
-      const sqlConfig: sql.config = {
-        user: dbUser,
-        password: process.env.DB_PASSWORD || "", // empty password specified
-        server: process.env.DB_SERVER || "localhost",
-        database: process.env.DB_NAME || "sportzone_db",
-        port: parseInt(process.env.DB_PORT || "1433"),
-        domain: domain,
-        options: {
-          encrypt: false,
-          trustServerCertificate: true,
-          connectTimeout: 5000
-        }
-      };
+      const connectionString = process.env.DB_CONNECTION_STRING || process.env.DATABASE_URL;
+      const isLocalhost = (process.env.DB_SERVER || "localhost").toLowerCase() === "localhost" || 
+                          (process.env.DB_SERVER || "localhost") === "127.0.0.1";
+      const shouldEncrypt = process.env.DB_ENCRYPT ? process.env.DB_ENCRYPT === "true" : !isLocalhost;
 
-      console.log(`Connecting to SQL Server at ${sqlConfig.server}:${sqlConfig.port}, Database: ${sqlConfig.database}...`);
-      this.pool = await sql.connect(sqlConfig);
+      if (connectionString) {
+        console.log("Connecting to SQL Server using Connection String...");
+        this.pool = await sql.connect(connectionString);
+      } else {
+        const sqlConfig: sql.config = {
+          user: dbUser,
+          password: process.env.DB_PASSWORD || "", 
+          server: process.env.DB_SERVER || "localhost",
+          database: process.env.DB_NAME || "sportzone_db",
+          port: parseInt(process.env.DB_PORT || "1433"),
+          domain: domain,
+          options: {
+            encrypt: shouldEncrypt,
+            trustServerCertificate: true,
+            connectTimeout: 15000 // Increased timeout for cloud database connections
+          }
+        };
+
+        console.log(`Connecting to SQL Server at ${sqlConfig.server}:${sqlConfig.port}, Database: ${sqlConfig.database} (Encrypt: ${shouldEncrypt})...`);
+        this.pool = await sql.connect(sqlConfig);
+      }
       console.log("SQL Server connected successfully!");
 
       // Bootstrap and Seeding
