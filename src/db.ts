@@ -219,36 +219,7 @@ class Database {
   private parseConnectionString(connStr: string): sql.config {
     const trimmedConn = connStr.trim();
     
-    // 1. If it is a URI-style connection string (mssql:// or sqlserver://)
-    if (trimmedConn.startsWith("mssql://") || trimmedConn.startsWith("sqlserver://")) {
-      try {
-        const urlStr = trimmedConn.replace(/^sqlserver:/, "http:").replace(/^mssql:/, "http:");
-        const url = new URL(urlStr);
-        const user = decodeURIComponent(url.username);
-        const password = decodeURIComponent(url.password);
-        const server = url.hostname;
-        const port = url.port ? parseInt(url.port) : 1433;
-        const database = url.pathname.replace(/^\//, "");
-        const encrypt = url.searchParams.get("encrypt") === "true";
-        
-        return {
-          user,
-          password,
-          server,
-          port,
-          database,
-          options: {
-            encrypt,
-            trustServerCertificate: true,
-            connectTimeout: 30000
-          }
-        };
-      } catch (e: any) {
-        console.warn("Failed parsing URI-style connection string, falling back to basic configuration: ", e.message);
-      }
-    }
-
-    // 2. If it is a Key-Value pair (ADO.NET) connection string (e.g., Server=tcp:...;Database=...)
+    // Initialize config with default options
     const config: any = {
       options: {
         encrypt: true, // Default to true for cloud
@@ -257,6 +228,100 @@ class Database {
       }
     };
 
+    // 1. Check if it is a URI-style connection string containing "://"
+    if (trimmedConn.includes("://")) {
+      try {
+        const schemeParts = trimmedConn.split("://");
+        const rest = schemeParts[1];
+        
+        let serverAndRest = rest;
+        // Extract credentials if present (user:password@host)
+        if (rest.includes("@")) {
+          const atIdx = rest.indexOf("@");
+          const credentials = rest.substring(0, atIdx);
+          serverAndRest = rest.substring(atIdx + 1);
+          
+          if (credentials.includes(":")) {
+            const colonIdx = credentials.indexOf(":");
+            config.user = decodeURIComponent(credentials.substring(0, colonIdx));
+            config.password = decodeURIComponent(credentials.substring(colonIdx + 1));
+          } else {
+            config.user = decodeURIComponent(credentials);
+          }
+        }
+        
+        // Find first separator in serverAndRest to isolate host & port
+        // Could be '/', ';', or '?'
+        let firstSeparatorIdx = serverAndRest.length;
+        const separators = ["/", ";", "?"];
+        for (const sep of separators) {
+          const idx = serverAndRest.indexOf(sep);
+          if (idx !== -1 && idx < firstSeparatorIdx) {
+            firstSeparatorIdx = idx;
+          }
+        }
+        
+        const hostPortPart = serverAndRest.substring(0, firstSeparatorIdx);
+        const remainingPart = serverAndRest.substring(firstSeparatorIdx);
+        
+        // Parse host and port
+        if (hostPortPart.includes(":")) {
+          const colonIdx = hostPortPart.indexOf(":");
+          config.server = hostPortPart.substring(0, colonIdx);
+          config.port = parseInt(hostPortPart.substring(colonIdx + 1));
+        } else {
+          config.server = hostPortPart;
+          config.port = 1433; // Default SQL Server port
+        }
+        
+        // Parse database name from remaining path or query
+        if (remainingPart.startsWith("/")) {
+          let dbName = remainingPart.substring(1);
+          // Strip any query parameters or semicolons
+          const endIdx = dbName.search(/[;?]/);
+          if (endIdx !== -1) {
+            dbName = dbName.substring(0, endIdx);
+          }
+          if (dbName) {
+            config.database = dbName;
+          }
+        }
+        
+        // Parse any additional parameters in remainingPart (e.g. encrypt=true;databaseName=xxx)
+        if (remainingPart.includes(";") || remainingPart.includes("?")) {
+          const kvSeparator = remainingPart.includes(";") ? ";" : "&";
+          const cleanRemaining = remainingPart.replace(/^\//, "").replace(/^\?/, "");
+          const pairs = cleanRemaining.split(kvSeparator);
+          
+          for (const pair of pairs) {
+            const trimmed = pair.trim();
+            if (!trimmed) continue;
+            const eqIdx = trimmed.indexOf("=");
+            if (eqIdx === -1) continue;
+            const key = trimmed.substring(0, eqIdx).trim().toLowerCase();
+            const value = trimmed.substring(eqIdx + 1).trim();
+            
+            if (key === "database" || key === "databasename" || key === "initial catalog" || key === "db") {
+              config.database = value;
+            } else if (key === "user" || key === "userid" || key === "user id" || key === "uid" || key === "username") {
+              config.user = value;
+            } else if (key === "password" || key === "pwd" || key === "pass") {
+              config.password = value;
+            } else if (key === "encrypt") {
+              config.options.encrypt = value.toLowerCase() === "true" || value === "1";
+            } else if (key === "trustservercertificate") {
+              config.options.trustServerCertificate = value.toLowerCase() === "true" || value === "1";
+            }
+          }
+        }
+        
+        return config;
+      } catch (e: any) {
+        console.warn("URI parser failed, falling back to standard key-value parsing: ", e.message);
+      }
+    }
+
+    // 2. Standard Key-Value pair (ADO.NET) connection string (e.g., Server=tcp:...;Database=...)
     const pairs = trimmedConn.split(";");
     for (const pair of pairs) {
       const trimmed = pair.trim();
@@ -266,8 +331,7 @@ class Database {
       const key = trimmed.substring(0, eqIdx).trim().toLowerCase();
       const value = trimmed.substring(eqIdx + 1).trim();
 
-      if (key === "server" || key === "data source" || key === "address" || key === "addr") {
-        // Server key may contain port (e.g. Server=tcp:host,port or Server=host,port)
+      if (key === "server" || key === "data source" || key === "address" || key === "addr" || key === "host" || key === "hostname") {
         const hostPart = value.replace(/^tcp:/i, "").trim();
         if (hostPart.includes(",")) {
           const parts = hostPart.split(",");
@@ -280,11 +344,11 @@ class Database {
         } else {
           config.server = hostPart;
         }
-      } else if (key === "database" || key === "initial catalog") {
+      } else if (key === "database" || key === "initial catalog" || key === "db") {
         config.database = value;
-      } else if (key === "user id" || key === "user" || key === "uid") {
+      } else if (key === "user id" || key === "user" || key === "uid" || key === "username") {
         config.user = value;
-      } else if (key === "password" || key === "pwd") {
+      } else if (key === "password" || key === "pwd" || key === "pass") {
         config.password = value;
       } else if (key === "port") {
         config.port = parseInt(value);
