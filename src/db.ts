@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import sql from "mssql";
+import pg from "pg";
 
 const DB_FILE = path.join(process.cwd(), "db_store.json");
 
@@ -79,9 +80,126 @@ export interface Review {
   bookingId?: string;
 }
 
+function convertMssqlToPostgres(sqlText: string): string {
+  let converted = sqlText.trim();
+
+  // Convert the sysobjects table existence check
+  if (converted.includes("IF NOT EXISTS") && converted.includes("sysobjects")) {
+    const tableNameMatch = converted.match(/name\s*=\s*'(\w+)'/i);
+    if (tableNameMatch) {
+      const tableName = tableNameMatch[1];
+      const createIdx = converted.indexOf("CREATE TABLE");
+      if (createIdx !== -1) {
+        let createStatement = converted.substring(createIdx);
+        createStatement = createStatement.replace(/CREATE\s+TABLE\s+(\w+)/i, "CREATE TABLE IF NOT EXISTS $1");
+        converted = createStatement;
+      }
+    }
+  }
+
+  // Convert index existence check
+  if (converted.includes("sys.indexes") && converted.includes("CREATE UNIQUE INDEX")) {
+    const createIdx = converted.indexOf("CREATE UNIQUE INDEX");
+    if (createIdx !== -1) {
+      let createStatement = converted.substring(createIdx);
+      createStatement = createStatement.replace(/CREATE\s+UNIQUE\s+INDEX\s+(\w+)/i, "CREATE UNIQUE INDEX IF NOT EXISTS $1");
+      converted = createStatement;
+    }
+  }
+
+  // Convert sys.columns column addition check
+  if (converted.includes("sys.columns") && converted.includes("ALTER TABLE")) {
+    const tableMatch = converted.match(/ALTER\s+TABLE\s+(\w+)/i);
+    const colMatch = converted.match(/ADD\s+(\w+)\s+VARCHAR/i);
+    if (tableMatch && colMatch) {
+      const tableName = tableMatch[1];
+      const colName = colMatch[1];
+      converted = `ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS ${colName} VARCHAR(50) NULL;`;
+    }
+  }
+
+  // Convert data types
+  converted = converted
+    .replace(/NVARCHAR\(MAX\)/gi, "TEXT")
+    .replace(/NVARCHAR/gi, "VARCHAR")
+    .replace(/DATETIME/gi, "TIMESTAMP")
+    .replace(/dbo\./gi, "");
+
+  return converted;
+}
+
+class PgRequest {
+  private pool: pg.Pool;
+  private params: { [key: string]: any } = {};
+
+  constructor(pool: pg.Pool) {
+    this.pool = pool;
+  }
+
+  input(name: string, type: any, value: any) {
+    this.params[name] = value;
+    return this;
+  }
+
+  async query(sqlText: string) {
+    let convertedSql = convertMssqlToPostgres(sqlText);
+
+    // Find and replace all parameter names starting with @ (e.g. @id, @username) with $1, $2, ...
+    const paramRegex = /@(\w+)/g;
+    const foundParams: string[] = [];
+    let match;
+    while ((match = paramRegex.exec(convertedSql)) !== null) {
+      const pName = match[1];
+      if (!foundParams.includes(pName)) {
+        foundParams.push(pName);
+      }
+    }
+
+    const values: any[] = [];
+    // Sort parameters by length descending so that replacing @username_longer doesn't get messed up by replacing @username first
+    foundParams.sort((a, b) => b.length - a.length);
+
+    for (let i = 0; i < foundParams.length; i++) {
+      const pName = foundParams[i];
+      const pValue = this.params[pName] !== undefined ? this.params[pName] : null;
+      values.push(pValue);
+      
+      const replaceRegex = new RegExp(`@${pName}\\b`, "g");
+      convertedSql = convertedSql.replace(replaceRegex, `$${values.length}`);
+    }
+
+    const result = await this.pool.query(convertedSql, values);
+    
+    return {
+      recordset: result.rows
+    };
+  }
+}
+
+class PgPool {
+  public pool: pg.Pool;
+
+  constructor(connectionString: string) {
+    this.pool = new pg.Pool({
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    });
+  }
+
+  request() {
+    return new PgRequest(this.pool);
+  }
+
+  async close() {
+    await this.pool.end();
+  }
+}
+
 class Database {
   private isSqlEnabled: boolean = false;
-  private pool: sql.ConnectionPool | null = null;
+  private pool: any = null;
 
   constructor() {
     this.isSqlEnabled = process.env.DB_ENABLED === "true";
@@ -398,7 +516,18 @@ class Database {
                           (process.env.DB_SERVER || "localhost") === "127.0.0.1";
       const shouldEncrypt = process.env.DB_ENCRYPT ? process.env.DB_ENCRYPT === "true" : !isLocalhost;
 
-      if (connectionString && connectionString.trim() !== "") {
+      const isPostgres = connectionString && (
+        connectionString.trim().startsWith("postgresql://") || 
+        connectionString.trim().startsWith("postgres://")
+      );
+
+      if (isPostgres) {
+        console.log("Connecting to PostgreSQL/Supabase database...");
+        this.pool = new PgPool(connectionString!);
+        // Test connection
+        await this.pool.pool.query("SELECT 1");
+        console.log("PostgreSQL/Supabase connected successfully!");
+      } else if (connectionString && connectionString.trim() !== "") {
         console.log("Connecting to SQL Server using parsed Connection String...");
         const parsedConfig = this.parseConnectionString(connectionString);
         
@@ -580,7 +709,7 @@ class Database {
 
       // Seed core static tables (quan_huyen, bo_mon, and admin user) if empty
       const districtCheck = await this.pool.request().query("SELECT COUNT(*) as count FROM quan_huyen");
-      if (districtCheck.recordset[0].count === 0) {
+      if (Number(districtCheck.recordset[0].count) === 0) {
         console.log("Seeding static data to SQL Server...");
         
         // Districts
