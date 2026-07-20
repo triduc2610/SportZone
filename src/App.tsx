@@ -4,7 +4,6 @@ import AuthModal from './components/AuthModal';
 import CustomerModule from './components/CustomerModule';
 import OwnerModule from './components/OwnerModule';
 import AdminModule from './components/AdminModule';
-import DocumentationModule from './components/DocumentationModule';
 import { 
   Flame, ShieldAlert, LogIn, LogOut, Sparkles, 
   MapPin, Activity, HelpCircle, User as UserIcon, Settings, Calendar
@@ -274,17 +273,6 @@ export default function App() {
           </>
         )}
 
-        <button
-          onClick={() => setActivePortal('project_docs')}
-          className={`py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-            activePortal === 'project_docs'
-              ? 'bg-[#10B981]/10 text-[#064E3B] border border-[#10B981]/20 font-extrabold'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          📚 Tài liệu & Biểu đồ UML
-        </button>
-
       </nav>
 
       {/* Main Content Stage */}
@@ -338,10 +326,6 @@ export default function App() {
               if (tab === 'market') setActivePortal('admin_market');
             }}
           />
-        )}
-
-        {activePortal === 'project_docs' && (
-          <DocumentationModule />
         )}
 
       </main>
