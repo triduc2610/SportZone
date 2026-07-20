@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, CourtCluster, Court, PricingRule, Booking, BookingStatus, ClusterStatus } from '../types';
 import { 
   Building, Plus, Calendar, Clock, DollarSign, Activity, Sparkles, 
-  Target, Flame, Check, X, TrendingUp, Users, MapPin, BarChart2 
+  Target, Flame, Check, X, TrendingUp, Users, MapPin, BarChart2,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 interface OwnerModuleProps {
@@ -57,6 +58,55 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
   const [editCourtName, setEditCourtName] = useState('');
   const [editCourtSportId, setEditCourtSportId] = useState('');
   const [editCourtBasePrice, setEditCourtBasePrice] = useState('');
+
+  // Pagination states for OwnerModule
+  const [clustersPage, setClustersPage] = useState(1);
+  const CLUSTERS_PER_PAGE = 4;
+
+  const [courtsPage, setCourtsPage] = useState(1);
+  const COURTS_PER_PAGE = 5;
+
+  const [bookingsPage, setBookingsPage] = useState(1);
+  const BOOKINGS_PER_PAGE = 8;
+
+  // Reset page when switching tabs or selecting/deselecting cluster
+  useEffect(() => {
+    setClustersPage(1);
+    setBookingsPage(1);
+  }, [activeTab]);
+
+  useEffect(() => {
+    setCourtsPage(1);
+  }, [selectedCluster]);
+
+  const totalClustersPages = useMemo(() => {
+    return Math.ceil(myClusters.length / CLUSTERS_PER_PAGE);
+  }, [myClusters]);
+
+  const paginatedClusters = useMemo(() => {
+    const startIndex = (clustersPage - 1) * CLUSTERS_PER_PAGE;
+    return myClusters.slice(startIndex, startIndex + CLUSTERS_PER_PAGE);
+  }, [myClusters, clustersPage]);
+
+  const totalCourtsPages = useMemo(() => {
+    const courtCount = selectedCluster?.courts?.length || 0;
+    return Math.ceil(courtCount / COURTS_PER_PAGE);
+  }, [selectedCluster]);
+
+  const paginatedCourts = useMemo(() => {
+    if (!selectedCluster || !selectedCluster.courts) return [];
+    const startIndex = (courtsPage - 1) * COURTS_PER_PAGE;
+    return selectedCluster.courts.slice(startIndex, startIndex + COURTS_PER_PAGE);
+  }, [selectedCluster, courtsPage]);
+
+  const totalBookingsPages = useMemo(() => {
+    return Math.ceil(incomingBookings.length / BOOKINGS_PER_PAGE);
+  }, [incomingBookings]);
+
+  const paginatedBookings = useMemo(() => {
+    const startIndex = (bookingsPage - 1) * BOOKINGS_PER_PAGE;
+    return incomingBookings.slice(startIndex, startIndex + BOOKINGS_PER_PAGE);
+  }, [incomingBookings, bookingsPage]);
 
   useEffect(() => {
     fetch('/api/districts')
@@ -520,7 +570,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
             )}
 
             <div className="space-y-2">
-              {myClusters.map(c => {
+              {paginatedClusters.map(c => {
                 const isSelected = selectedCluster?.id === c.id;
                 let badgeColor = '';
                 let statusText = '';
@@ -559,6 +609,39 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                 );
               })}
             </div>
+
+            {/* Pagination for Owner Clusters */}
+            {totalClustersPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setClustersPage(prev => Math.max(prev - 1, 1))}
+                  disabled={clustersPage === 1}
+                  className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                    clustersPage === 1
+                      ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-[11px] text-slate-400 font-semibold">
+                  Trang {clustersPage} / {totalClustersPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setClustersPage(prev => Math.min(prev + 1, totalClustersPages))}
+                  disabled={clustersPage === totalClustersPages}
+                  className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                    clustersPage === totalClustersPages
+                      ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Column 2 & 3: Detailed Courts inside Selected Cluster */}
@@ -819,7 +902,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {selectedCluster.courts && selectedCluster.courts.length > 0 ? (
-                        selectedCluster.courts.map((court: any) => {
+                        paginatedCourts.map((court: any) => {
                           const isEditing = editingCourtId === court.id;
                           return (
                             <div key={court.id} className="p-4 bg-slate-950 border border-slate-850 rounded-xl flex flex-col gap-3">
@@ -924,6 +1007,39 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
                         </div>
                       )}
                     </div>
+
+                    {/* Pagination for courts */}
+                    {totalCourtsPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-4 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setCourtsPage(prev => Math.max(prev - 1, 1))}
+                          disabled={courtsPage === 1}
+                          className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                            courtsPage === 1
+                              ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                              : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                          }`}
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        <span className="text-[11px] text-slate-400 font-semibold font-sans">
+                          Trang {courtsPage} / {totalCourtsPages}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCourtsPage(prev => Math.min(prev + 1, totalCourtsPages))}
+                          disabled={courtsPage === totalCourtsPages}
+                          className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                            courtsPage === totalCourtsPages
+                              ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                              : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                          }`}
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Active pricing rules */}
@@ -974,7 +1090,7 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
 
           <div className="space-y-4">
             {incomingBookings.length > 0 ? (
-              incomingBookings.map(b => {
+              paginatedBookings.map(b => {
                 let statusBadge = '';
                 let statusLabel = '';
                 if (b.status === 'pending_payment') {
@@ -1057,6 +1173,39 @@ export default function OwnerModule({ user, activeTab, setActiveTab }: OwnerModu
             ) : (
               <div className="py-12 text-center bg-slate-950 border border-slate-850 rounded-xl">
                 <p className="text-xs text-slate-500">Chưa ghi nhận lịch đặt trực tuyến nào cho cụm sân của bạn!</p>
+              </div>
+            )}
+
+            {/* Pagination for Owner Bookings */}
+            {totalBookingsPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setBookingsPage(prev => Math.max(prev - 1, 1))}
+                  disabled={bookingsPage === 1}
+                  className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                    bookingsPage === 1
+                      ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-[11px] text-slate-400 font-semibold">
+                  Trang {bookingsPage} / {totalBookingsPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setBookingsPage(prev => Math.min(prev + 1, totalBookingsPages))}
+                  disabled={bookingsPage === totalBookingsPages}
+                  className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                    bookingsPage === totalBookingsPages
+                      ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronRight size={14} />
+                </button>
               </div>
             )}
           </div>

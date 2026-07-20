@@ -49,6 +49,17 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
   
   // Booking History State
   const [bookingHistory, setBookingHistory] = useState<any[]>([]);
+  const [historyPage, setHistoryPage] = useState<number>(1);
+  const HISTORY_PER_PAGE = 5;
+
+  const totalHistoryPages = useMemo(() => {
+    return Math.ceil(bookingHistory.length / HISTORY_PER_PAGE);
+  }, [bookingHistory]);
+
+  const paginatedHistory = useMemo(() => {
+    const startIndex = (historyPage - 1) * HISTORY_PER_PAGE;
+    return bookingHistory.slice(startIndex, startIndex + HISTORY_PER_PAGE);
+  }, [bookingHistory, historyPage]);
 
   // Reviews States
   const [ratingBookingId, setRatingBookingId] = useState<string | null>(null);
@@ -914,7 +925,7 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
 
           <div className="space-y-4">
             {bookingHistory.length > 0 ? (
-              bookingHistory.map(booking => {
+              paginatedHistory.map(booking => {
                 let statusBadge = '';
                 if (booking.status === 'pending_payment') {
                   statusBadge = 'bg-amber-50 text-amber-600 border-amber-200';
@@ -1072,6 +1083,54 @@ export default function CustomerModule({ user, onOpenAuth, activeTab, setActiveT
             ) : (
               <div className="py-12 text-center bg-slate-50 border border-slate-200 rounded-xl">
                 <p className="text-xs text-slate-500 font-medium">Bạn chưa có lịch đặt sân nào trên hệ thống SportZone Hà Nội!</p>
+              </div>
+            )}
+
+            {/* Pagination Component */}
+            {totalHistoryPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setHistoryPage(prev => Math.max(prev - 1, 1))}
+                  disabled={historyPage === 1}
+                  className={`p-2 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                    historyPage === 1
+                      ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setHistoryPage(page)}
+                      className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        historyPage === page
+                          ? 'bg-[#10B981] text-white shadow-xs border border-[#10B981]'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:text-[#10B981] hover:border-[#10B981]/50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setHistoryPage(prev => Math.min(prev + 1, totalHistoryPages))}
+                  disabled={historyPage === totalHistoryPages}
+                  className={`p-2 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                    historyPage === totalHistoryPages
+                      ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronRight size={14} />
+                </button>
               </div>
             )}
           </div>

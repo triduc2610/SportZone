@@ -969,6 +969,30 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/admin/users/:id", async (req, res) => {
+    try {
+      const userIdToDelete = req.params.id;
+      const users = await db.getUsers();
+      const user = users.find((u: any) => u.id === userIdToDelete);
+      if (!user) {
+        return res.status(404).json({ error: "Không tìm thấy người dùng này!" });
+      }
+
+      // Safeguard: Prevent deleting the last administrator
+      if (user.role === "admin") {
+        const admins = users.filter((u: any) => u.role === "admin");
+        if (admins.length <= 1) {
+          return res.status(400).json({ error: "Không thể xóa tài khoản Admin duy nhất của hệ thống!" });
+        }
+      }
+
+      await db.deleteUser(userIdToDelete);
+      res.json({ message: "Xóa người dùng thành công!" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // --- Hanoi SportZone Gemini AI Advisor Endpoint ---
   app.post("/api/gemini/advisor", async (req, res) => {
     const { message } = req.body;

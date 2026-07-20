@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, CourtCluster, Booking, BookingStatus, ClusterStatus } from '../types';
 import { 
   Users, Building, DollarSign, Calendar, Check, X, ShieldAlert, 
-  MapPin, AlertCircle, BarChart2, Briefcase, Activity, Flame, Sparkles, Target
+  MapPin, AlertCircle, BarChart2, Briefcase, Activity, Flame, Sparkles, Target,
+  ChevronLeft, ChevronRight, Trash2
 } from 'lucide-react';
 
 interface AdminModuleProps {
@@ -17,6 +18,70 @@ export default function AdminModule({ user, activeTab, setActiveTab }: AdminModu
   const [pendingClusters, setPendingClusters] = useState<any[]>([]);
   const [adminStats, setAdminStats] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // User deletion & feedback states
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleDeleteUser = async (userIdToDelete: string) => {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userIdToDelete}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMessage('Xóa người dùng thành công khỏi hệ thống!');
+        setTimeout(() => setSuccessMessage(null), 4000);
+        fetchAdminStats();
+      } else {
+        setErrorMessage(data.error || 'Có lỗi xảy ra khi xóa người dùng.');
+        setTimeout(() => setErrorMessage(null), 4000);
+      }
+    } catch (err: any) {
+      setErrorMessage('Không thể kết nối với máy chủ.');
+      setTimeout(() => setErrorMessage(null), 4000);
+    }
+  };
+
+  // Pagination states
+  const [approvalsPage, setApprovalsPage] = useState(1);
+  const APPROVALS_PER_PAGE = 5;
+
+  const [usersPage, setUsersPage] = useState(1);
+  const USERS_PER_PAGE = 10;
+
+  // Reset page when switching tabs
+  useEffect(() => {
+    setApprovalsPage(1);
+    setUsersPage(1);
+  }, [activeTab]);
+
+  const totalApprovalsPages = useMemo(() => {
+    return Math.ceil(pendingClusters.length / APPROVALS_PER_PAGE);
+  }, [pendingClusters]);
+
+  const paginatedPendingClusters = useMemo(() => {
+    const startIndex = (approvalsPage - 1) * APPROVALS_PER_PAGE;
+    return pendingClusters.slice(startIndex, startIndex + APPROVALS_PER_PAGE);
+  }, [pendingClusters, approvalsPage]);
+
+  const totalUsersPages = useMemo(() => {
+    return adminStats && adminStats.users
+      ? Math.ceil(adminStats.users.length / USERS_PER_PAGE)
+      : 0;
+  }, [adminStats]);
+
+  const paginatedUsers = useMemo(() => {
+    if (!adminStats || !adminStats.users) return [];
+    const startIndex = (usersPage - 1) * USERS_PER_PAGE;
+    return adminStats.users.slice(startIndex, startIndex + USERS_PER_PAGE);
+  }, [adminStats, usersPage]);
 
   useEffect(() => {
     fetchPendingClusters();
@@ -152,7 +217,7 @@ export default function AdminModule({ user, activeTab, setActiveTab }: AdminModu
 
           <div className="space-y-4">
             {pendingClusters.length > 0 ? (
-              pendingClusters.map(c => (
+              paginatedPendingClusters.map(c => (
                 <div 
                   key={c.id}
                   className="p-5 bg-slate-950 border border-slate-850 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in"
@@ -205,16 +270,65 @@ export default function AdminModule({ user, activeTab, setActiveTab }: AdminModu
                 <p className="text-xs text-slate-500">Không có cụm sân nào đang chờ thẩm định duyệt!</p>
               </div>
             )}
+
+            {/* Pagination controls for approvals */}
+            {totalApprovalsPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-slate-850">
+                <button
+                  type="button"
+                  onClick={() => setApprovalsPage(prev => Math.max(prev - 1, 1))}
+                  disabled={approvalsPage === 1}
+                  className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                    approvalsPage === 1
+                      ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-[11px] text-slate-400 font-semibold">
+                  Trang {approvalsPage} / {totalApprovalsPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setApprovalsPage(prev => Math.min(prev + 1, totalApprovalsPages))}
+                  disabled={approvalsPage === totalApprovalsPages}
+                  className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                    approvalsPage === totalApprovalsPages
+                      ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                  }`}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {activeTab === 'users' && adminStats && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <div>
-            <h2 className="text-base font-bold text-white">Quản trị Thành viên & Đối tác</h2>
-            <p className="text-xs text-slate-400">Xem và phân cấp quyền quản lý người dùng hệ thống SportZone</p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-bold text-white">Quản trị Thành viên & Đối tác</h2>
+              <p className="text-xs text-slate-400">Xem và phân cấp quyền quản lý người dùng hệ thống SportZone</p>
+            </div>
           </div>
+
+          {/* Alert banners */}
+          {successMessage && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl flex items-center gap-2 animate-fade-in">
+              <Check size={14} className="shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+          {errorMessage && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center gap-2 animate-fade-in">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           <div className="overflow-x-auto bg-slate-950 rounded-xl border border-slate-850">
             <table className="w-full text-left border-collapse text-xs">
@@ -225,10 +339,11 @@ export default function AdminModule({ user, activeTab, setActiveTab }: AdminModu
                   <th className="p-4 font-semibold">Số điện thoại</th>
                   <th className="p-4 font-semibold">Vai trò phân cấp</th>
                   <th className="p-4 font-semibold">Ngày đăng ký</th>
+                  <th className="p-4 font-semibold text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-900">
-                {adminStats.users?.map((u: any) => {
+                {paginatedUsers?.map((u: any) => {
                   let roleColor = '';
                   let roleLabel = '';
                   if (u.role === 'admin') {
@@ -253,12 +368,82 @@ export default function AdminModule({ user, activeTab, setActiveTab }: AdminModu
                         </span>
                       </td>
                       <td className="p-4 text-slate-500">{new Date(u.createdAt).toLocaleDateString('vi-VN')}</td>
+                      <td className="p-4 text-right">
+                        {u.id === user.id ? (
+                          <span className="text-[10px] text-slate-500 font-semibold italic">
+                            Đang đăng nhập
+                          </span>
+                        ) : confirmDeleteId === u.id ? (
+                          <div className="flex items-center justify-end gap-1.5 animate-fade-in">
+                            <span className="text-[10px] text-rose-400 font-semibold">Xóa?</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleDeleteUser(u.id);
+                                setConfirmDeleteId(null);
+                              }}
+                              className="py-0.5 px-2 bg-rose-600 text-white rounded text-[10px] font-bold hover:bg-rose-700 transition-colors cursor-pointer"
+                            >
+                              Có
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="py-0.5 px-2 bg-slate-800 text-slate-300 rounded text-[10px] font-bold hover:bg-slate-700 transition-colors cursor-pointer"
+                            >
+                              Không
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(u.id)}
+                            className="p-1 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer inline-flex items-center justify-center"
+                            title="Xóa người dùng"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination controls for users */}
+          {totalUsersPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4 pt-1">
+              <button
+                type="button"
+                onClick={() => setUsersPage(prev => Math.max(prev - 1, 1))}
+                disabled={usersPage === 1}
+                className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                  usersPage === 1
+                    ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                }`}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-[11px] text-slate-400 font-semibold">
+                Trang {usersPage} / {totalUsersPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setUsersPage(prev => Math.min(prev + 1, totalUsersPages))}
+                disabled={usersPage === totalUsersPages}
+                className={`p-1.5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                  usersPage === totalUsersPages
+                    ? 'bg-slate-900/40 border-slate-850 text-slate-600 cursor-not-allowed'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-[#10B981] hover:border-[#10B981]/50'
+                }`}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 

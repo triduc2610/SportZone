@@ -926,6 +926,19 @@ class Database {
     return user;
   }
 
+  public async deleteUser(id: string): Promise<void> {
+    if (this.isSqlEnabled && this.pool) {
+      await this.pool.request()
+        .input("id", sql.VarChar(50), id)
+        .query("DELETE FROM nguoi_dung WHERE id = @id");
+      return;
+    }
+
+    const db = this.loadJsonDB();
+    db.users = db.users.filter((u: any) => u.id !== id);
+    this.saveJsonDB(db);
+  }
+
   // 4. Clusters
   public async getClusters(): Promise<CourtCluster[]> {
     if (this.isSqlEnabled && this.pool) {
