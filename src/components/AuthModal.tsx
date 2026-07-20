@@ -17,18 +17,56 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
   const [role, setRole] = useState<UserRole>(UserRole.CUSTOMER);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleToggleMode = (loginMode: boolean) => {
+    setIsLogin(loginMode);
+    setSubmitted(false);
+    setError('');
+    // Reset inputs when switching modes
+    setUsername('');
+    setPassword('');
+    setFullName('');
+    setPhone('');
+  };
+
+  // Validation helpers for warning classes
+  const isUsernameEmpty = submitted && !username.trim();
+  const isPasswordEmpty = submitted && !password.trim();
+  const isFullNameEmpty = submitted && !isLogin && !fullName.trim();
+  const isPhoneEmpty = submitted && !isLogin && !phone.trim();
+  const isPhoneInvalidFormat = submitted && !isLogin && phone.trim().length > 0 && !/^\d{10}$/.test(phone.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSubmitted(true);
+
+    // Front-end validation
+    if (isLogin) {
+      if (!username.trim() || !password.trim()) {
+        setError('Vui lòng điền đầy đủ thông tin tài khoản và mật khẩu!');
+        return;
+      }
+    } else {
+      if (!username.trim() || !password.trim() || !fullName.trim() || !phone.trim()) {
+        setError('Vui lòng điền đầy đủ các thông tin bắt buộc còn trống!');
+        return;
+      }
+      if (!/^\d{10}$/.test(phone.trim())) {
+        setError('Số điện thoại không hợp lệ! Số điện thoại phải gồm đúng 10 chữ số.');
+        return;
+      }
+    }
+
     setLoading(true);
 
     const url = isLogin ? '/api/auth/login' : '/api/auth/register';
     const body = isLogin 
-      ? { username, password }
-      : { username, password, fullName, phone, role };
+      ? { username: username.trim(), password }
+      : { username: username.trim(), password, fullName: fullName.trim(), phone: phone.trim(), role };
 
     try {
       const res = await fetch(url, {
@@ -82,41 +120,57 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
           </div>
 
           {error && (
-            <div className="p-3 mb-4 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-600 font-semibold">
+            <div className="p-3 mb-4 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-600 font-semibold animate-shake">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1">Tên đăng nhập</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1 flex justify-between items-center">
+                <span>Tên đăng nhập <span className="text-rose-500">*</span></span>
+                {isUsernameEmpty && (
+                  <span className="text-rose-500 text-[10px] font-medium animate-pulse">Không được để trống</span>
+                )}
+              </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${isUsernameEmpty ? 'text-rose-400' : 'text-slate-400'}`}>
                   <UserIcon size={16} />
                 </span>
                 <input
                   type="text"
-                  required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#10B981] transition-colors shadow-xs"
+                  className={`w-full bg-white border rounded-xl py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition-colors shadow-xs ${
+                    isUsernameEmpty 
+                      ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/20' 
+                      : 'border-slate-200 focus:border-[#10B981]'
+                  }`}
                   placeholder="Nhập username"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1">Mật khẩu</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1 flex justify-between items-center">
+                <span>Mật khẩu <span className="text-rose-500">*</span></span>
+                {isPasswordEmpty && (
+                  <span className="text-rose-500 text-[10px] font-medium animate-pulse">Không được để trống</span>
+                )}
+              </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${isPasswordEmpty ? 'text-rose-400' : 'text-slate-400'}`}>
                   <Lock size={16} />
                 </span>
                 <input
                   type="password"
-                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#10B981] transition-colors shadow-xs"
+                  className={`w-full bg-white border rounded-xl py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition-colors shadow-xs ${
+                    isPasswordEmpty 
+                      ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/20' 
+                      : 'border-slate-200 focus:border-[#10B981]'
+                  }`}
                   placeholder="Nhập mật khẩu"
                 />
               </div>
@@ -125,29 +179,48 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
             {!isLogin && (
               <>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Họ và tên</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 flex justify-between items-center">
+                    <span>Họ và tên <span className="text-rose-500">*</span></span>
+                    {isFullNameEmpty && (
+                      <span className="text-rose-500 text-[10px] font-medium animate-pulse">Không được để trống</span>
+                    )}
+                  </label>
                   <input
                     type="text"
-                    required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl py-2 px-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#10B981] transition-colors shadow-xs"
+                    className={`w-full bg-white border rounded-xl py-2 px-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition-colors shadow-xs ${
+                      isFullNameEmpty 
+                        ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/20' 
+                        : 'border-slate-200 focus:border-[#10B981]'
+                    }`}
                     placeholder="Nguyễn Văn A"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Số điện thoại</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1 flex justify-between items-center">
+                    <span>Số điện thoại <span className="text-rose-500">*</span></span>
+                    {isPhoneEmpty && (
+                      <span className="text-rose-500 text-[10px] font-medium animate-pulse">Không được để trống</span>
+                    )}
+                    {isPhoneInvalidFormat && (
+                      <span className="text-rose-500 text-[10px] font-medium animate-pulse">Phải gồm đúng 10 chữ số</span>
+                    )}
+                  </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${isPhoneEmpty || isPhoneInvalidFormat ? 'text-rose-400' : 'text-slate-400'}`}>
                       <Phone size={16} />
                     </span>
                     <input
                       type="tel"
-                      required
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#10B981] transition-colors shadow-xs"
+                      className={`w-full bg-white border rounded-xl py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition-colors shadow-xs ${
+                        isPhoneEmpty || isPhoneInvalidFormat
+                          ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/20' 
+                          : 'border-slate-200 focus:border-[#10B981]'
+                      }`}
                       placeholder="09xx xxx xxx"
                     />
                   </div>
@@ -199,7 +272,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
               <p>
                 Chưa có tài khoản?{' '}
                 <button
-                  onClick={() => setIsLogin(false)}
+                  onClick={() => handleToggleMode(false)}
                   className="text-[#10B981] hover:underline font-bold"
                 >
                   Đăng ký ngay
@@ -209,7 +282,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
               <p>
                 Đã có tài khoản?{' '}
                 <button
-                  onClick={() => setIsLogin(true)}
+                  onClick={() => handleToggleMode(true)}
                   className="text-[#10B981] hover:underline font-bold"
                 >
                   Đăng nhập tại đây

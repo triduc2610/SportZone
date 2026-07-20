@@ -114,6 +114,18 @@ async function startServer() {
         return res.status(400).json({ error: "Tên đăng nhập đã tồn tại trong hệ thống!" });
       }
 
+      // Validate phone number format (exactly 10 digits)
+      const phoneRegex = /^\d{10}$/;
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({ error: "Số điện thoại không hợp lệ! Số điện thoại phải gồm đúng 10 chữ số." });
+      }
+
+      // Check unique phone number
+      const phoneExists = users.find((u: any) => u.phone === phone);
+      if (phoneExists) {
+        return res.status(400).json({ error: "Số điện thoại này đã được đăng ký bởi một tài khoản khác!" });
+      }
+
       const hashedPassword = bcrypt.hashSync(password, 10);
       const newUser = {
         id: "usr-" + Date.now(),
